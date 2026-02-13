@@ -4,6 +4,45 @@ from esphome.core import ID
 from ..display import CONF_INIT_SEQUENCE_ID
 from . import EpaperModel
 
+class Waveshare4ColorModel(EpaperModel):
+    """Model for Waveshare 4-color (BWRY) displays that don't use LUTs."""
+    
+    def __init__(self, name, **defaults):
+        super().__init__(name, "EpaperWaveshare4Color", **defaults)
+
+    def get_constructor_args(self, config) -> tuple:
+        # 4-color displays don't use LUTs, so we return empty args
+        return ()
+
+
+# fmt: off
+# Waveshare 2.13inch e-Paper HAT (G) - 250x122, 4-color (Black/White/Red/Yellow)
+# Based on Waveshare's reference implementation
+Waveshare4ColorModel(
+    "waveshare-2.13in-g",
+    width=122,
+    height=250,
+    initsequence=(
+        # Software Reset
+        (0x12,),  # SWRESET
+        # Driver output control
+        (0x01, 0xF9, 0x00, 0x00),
+        # Data entry mode setting
+        (0x11, 0x03),
+        # Set RAM X address
+        (0x44, 0x00, 0x0F),
+        # Set RAM Y address
+        (0x45, 0x00, 0x00, 0xF9, 0x00),
+        # Border Waveform Control
+        (0x3C, 0x05),
+        # Read built-in temperature sensor
+        (0x18, 0x80),
+        # Set RAM X address counter
+        (0x4E, 0x00),
+        # Set RAM Y address counter  
+        (0x4F, 0x00, 0x00),
+    ),
+)
 
 class WaveshareModel(EpaperModel):
     def __init__(self, name, lut, lut_partial=None, **defaults):

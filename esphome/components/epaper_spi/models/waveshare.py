@@ -4,20 +4,51 @@ from esphome.core import ID
 from ..display import CONF_INIT_SEQUENCE_ID
 from . import EpaperModel
 
+
 class Waveshare4ColorModel(EpaperModel):
-    """Model for Waveshare 4-color (BWRY) displays that don't use LUTs."""
+    """Model for Waveshare 4-color (BWRY) displays.
     
-    def __init__(self, name, **defaults):
+    These displays use a similar protocol to the 2-color Waveshare displays,
+    but with 2 bits per pixel instead of 1 bit per pixel.
+    """
+    
+    def __init__(self, name, lut=None, lut_partial=None, **defaults):
         super().__init__(name, "EpaperWaveshare4Color", **defaults)
+        self.lut = lut if lut is not None else []
+        self.lut_partial = lut_partial
 
     def get_constructor_args(self, config) -> tuple:
-        # 4-color displays don't use LUTs, so we return empty args
-        return ()
+        # Similar to WaveshareModel, but for 4-color displays
+        if self.lut:
+            lut = (
+                cg.static_const_array(
+                    ID(config[CONF_INIT_SEQUENCE_ID].id + "_lut", type=cg.uint8), self.lut
+                ),
+                len(self.lut),
+            )
+        else:
+            lut = cg.nullptr, 0
+            
+        if self.lut_partial is None:
+            lut_partial = cg.nullptr, 0
+        else:
+            lut_partial = (
+                cg.static_const_array(
+                    ID(
+                        config[CONF_INIT_SEQUENCE_ID].id + "_lut_partial", type=cg.uint8
+                    ),
+                    self.lut_partial,
+                ),
+                len(self.lut_partial),
+            )
+        return *lut, *lut_partial
 
 
 # fmt: off
 # Waveshare 2.13inch e-Paper HAT (G) - 250x122, 4-color (Black/White/Red/Yellow)
 # Based on Waveshare's reference implementation
+# Note: 4-color displays typically don't use LUTs in the same way as 2-color,
+# but we provide empty LUTs to maintain API compatibility
 Waveshare4ColorModel(
     "waveshare-2.13in-g",
     width=122,
@@ -27,21 +58,23 @@ Waveshare4ColorModel(
         (0x12,),  # SWRESET
         # Driver output control
         (0x01, 0xF9, 0x00, 0x00),
-        # Data entry mode setting
+        # Data entry mode setting (X increment, Y increment, X direction)
         (0x11, 0x03),
-        # Set RAM X address
+        # Set RAM X address (0x00 to 0x0F = 0 to 15 in decimal, covers 16 bytes = 122 pixels / 8 pixels per byte ≈ 16 bytes)
         (0x44, 0x00, 0x0F),
-        # Set RAM Y address
+        # Set RAM Y address (0x0000 to 0x00F9 = 0 to 249 in decimal, 250 lines)
         (0x45, 0x00, 0x00, 0xF9, 0x00),
         # Border Waveform Control
         (0x3C, 0x05),
         # Read built-in temperature sensor
         (0x18, 0x80),
-        # Set RAM X address counter
+        # Set RAM X address counter to 0
         (0x4E, 0x00),
-        # Set RAM Y address counter  
+        # Set RAM Y address counter to 0
         (0x4F, 0x00, 0x00),
     ),
+    lut=[],  # 4-color displays don't use traditional LUTs
+    lut_partial=None,
 )
 
 class WaveshareModel(EpaperModel):

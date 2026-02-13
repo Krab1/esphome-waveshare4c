@@ -9,8 +9,8 @@ static const char *const TAG = "epaper_spi.waveshare_4color";
 // Color encoding for 4-color display (2 bits per pixel):
 // Black  = 00 (0)
 // White  = 01 (1)
-// Red    = 10 (2)
-// Yellow = 11 (3)
+// Yellow = 10 (2) - NOTE: Waveshare has Yellow/Red swapped from what I had before!
+// Red    = 11 (3)
 
 uint8_t EpaperWaveshare4Color::get_color_bits_(Color color) {
   uint8_t r = color.r;
@@ -24,12 +24,12 @@ uint8_t EpaperWaveshare4Color::get_color_bits_(Color color) {
 
   // Check for yellow (high red, high green, low blue)
   if (r > 200 && g > 200 && b < 100) {
-    return 0b11;  // Yellow
+    return 0b10;  // Yellow
   }
 
   // Check for red (high red, low green, low blue)
   if (r > 200 && g < 100 && b < 100) {
-    return 0b10;  // Red
+    return 0b11;  // Red
   }
 
   // Default to black
@@ -77,6 +77,11 @@ void EpaperWaveshare4Color::set_window() {
   this->x_low_ &= ~3;  // Round down to multiple of 4
   this->x_high_ += 3;
   this->x_high_ &= ~3;  // Round up to multiple of 4
+  
+  // Don't allow x_high to exceed actual display width
+  if (this->x_high_ > this->width_) {
+    this->x_high_ = this->width_;
+  }
 
   uint16_t x_start = this->x_low_ / 4;  // 4 pixels per byte
   uint16_t x_end = (this->x_high_ - 1) / 4;
@@ -95,8 +100,8 @@ void EpaperWaveshare4Color::set_window() {
 
 void EpaperWaveshare4Color::refresh_screen(bool partial) {
   // 4-color displays only support full refresh
-  this->cmd_data(0x22, {0xF7});  // Display update control for 4-color
-  this->command(0x20);            // Master activation
+  // CRITICAL FIX: Use Waveshare's refresh command
+  this->cmd_data(0x12, {0x00});  // Display refresh: 0x12 with data 0x00
   this->next_delay_ = 15000;      // 15 seconds for 4-color displays
   ESP_LOGD(TAG, "Display refresh initiated (4-color, ~15s)");
 }
@@ -108,8 +113,8 @@ bool HOT EpaperWaveshare4Color::transfer_data() {
     // Set window for the dirty region
     this->set_window();
 
-    // Write RAM command (0x24 for main buffer)
-    this->command(0x24);
+    // CRITICAL FIX: Use Waveshare's data write command
+    this->command(0x10);  // Write RAM - 0x10, not 0x24!
     this->current_data_index_ = this->y_low_;  // Track current line
   }
 
@@ -127,7 +132,7 @@ bool HOT EpaperWaveshare4Color::transfer_data() {
 
     // Copy row data
     for (size_t i = 0; i != row_length; i++) {
-      bytes_to_send[i] = this->buffer_[data_idx++];
+      bytes_to_send[i] = this->buffer_[data_idx + i];
     }
 
     ++this->current_data_index_;

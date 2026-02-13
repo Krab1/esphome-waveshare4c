@@ -37,22 +37,17 @@ class Waveshare4ColorModel(EpaperModel):
 
 
 # fmt: off
-# Waveshare 2.13inch e-Paper HAT (G) - 250x122, 4-color (Black/White/Red/Yellow)
-# Based on Waveshare's reference implementation
+# Waveshare 2.13inch e-Paper HAT (G) V2 - 124x250, 4-color (Black/White/Yellow/Red)
+# Based on Waveshare's EPD_2in13g_V2.cpp reference implementation
 Waveshare4ColorModel(
     "waveshare-2.13in-g",
-    width=122,
+    width=124,  # CRITICAL FIX: 124 pixels, not 122!
     height=250,
     initsequence=(
-        (0x12,),  # Software reset
-        (0x01, 0xF9, 0x00, 0x00),  # Driver output control
-        (0x11, 0x03),  # Data entry mode
-        (0x44, 0x00, 0x0F),  # Set RAM X address (0-15 bytes = 16*4 = 64 pixels... wait, need to check)
-        (0x45, 0x00, 0x00, 0xF9, 0x00),  # Set RAM Y address (0-249)
-        (0x3C, 0x05),  # Border waveform control
-        (0x18, 0x80),  # Read temperature sensor
-        (0x4E, 0x00),  # Set RAM X counter
-        (0x4F, 0x00, 0x00),  # Set RAM Y counter
+        # V2 init sequence - much simpler than V1
+        (0x61, 0x00, 0x7C, 0x00, 0xFA),  # TRES: Resolution 124×250 (0x7C=124, 0xFA=250)
+        (0xE9, 0x01),  # Unknown register
+        (0x04,),  # Power on
     ),
     lut=(),  # Empty LUT - 4-color displays don't use traditional LUTs
     lut_partial=None,

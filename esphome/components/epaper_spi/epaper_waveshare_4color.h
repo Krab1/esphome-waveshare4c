@@ -17,10 +17,13 @@ class EpaperWaveshare4Color final : public EPaperMono {
         lut_length_(lut_length),
         partial_lut_(partial_lut),
         partial_lut_length_(partial_lut_length) {
-    // 4-color displays need 2 bits per pixel (4 pixels per byte) instead of 1 bit per pixel (8 pixels per byte)
-    // Recalculate buffer_length_ for 2 bits per pixel
-    this->buffer_length_ = (width * height + 3) / 4;  // 4 pixels per byte
-    this->row_width_4color_ = (width + 3) / 4;        // row width in bytes for 4-color
+    // 4-color displays need 2 bits per pixel (4 pixels per byte)
+    // Calculate row width in bytes (rounded up to nearest byte)
+    this->row_width_4color_ = (width + 3) / 4;  // For 122: (122 + 3) / 4 = 31 bytes
+    
+    // CRITICAL FIX: Buffer must be row_width * height
+    // This ensures we have enough space when rows are aligned to byte boundaries
+    this->buffer_length_ = this->row_width_4color_ * height;  // 31 * 250 = 7750 bytes
   }
 
  protected:

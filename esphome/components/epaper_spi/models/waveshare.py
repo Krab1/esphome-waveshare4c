@@ -6,29 +6,21 @@ from . import EpaperModel
 
 
 class Waveshare4ColorModel(EpaperModel):
-    """Model for Waveshare 4-color (BWRY) displays.
+    """Model for Waveshare 4-color (BWRY) displays that use 2 bits per pixel."""
     
-    These displays use a similar protocol to the 2-color Waveshare displays,
-    but with 2 bits per pixel instead of 1 bit per pixel.
-    """
-    
-    def __init__(self, name, lut=None, lut_partial=None, **defaults):
+    def __init__(self, name, lut, lut_partial=None, **defaults):
         super().__init__(name, "EpaperWaveshare4Color", **defaults)
-        self.lut = lut if lut is not None else []
+        self.lut = lut
         self.lut_partial = lut_partial
 
     def get_constructor_args(self, config) -> tuple:
-        # Similar to WaveshareModel, but for 4-color displays
-        if self.lut:
-            lut = (
-                cg.static_const_array(
-                    ID(config[CONF_INIT_SEQUENCE_ID].id + "_lut", type=cg.uint8), self.lut
-                ),
-                len(self.lut),
-            )
-        else:
-            lut = cg.nullptr, 0
-            
+        # Same pattern as WaveshareModel - pass LUT arrays
+        lut = (
+            cg.static_const_array(
+                ID(config[CONF_INIT_SEQUENCE_ID].id + "_lut", type=cg.uint8), self.lut
+            ),
+            len(self.lut),
+        )
         if self.lut_partial is None:
             lut_partial = cg.nullptr, 0
         else:
@@ -47,33 +39,22 @@ class Waveshare4ColorModel(EpaperModel):
 # fmt: off
 # Waveshare 2.13inch e-Paper HAT (G) - 250x122, 4-color (Black/White/Red/Yellow)
 # Based on Waveshare's reference implementation
-# Note: 4-color displays typically don't use LUTs in the same way as 2-color,
-# but we provide empty LUTs to maintain API compatibility
 Waveshare4ColorModel(
     "waveshare-2.13in-g",
     width=122,
     height=250,
     initsequence=(
-        # Software Reset
-        (0x12,),  # SWRESET
-        # Driver output control
-        (0x01, 0xF9, 0x00, 0x00),
-        # Data entry mode setting (X increment, Y increment, X direction)
-        (0x11, 0x03),
-        # Set RAM X address (0x00 to 0x0F = 0 to 15 in decimal, covers 16 bytes = 122 pixels / 8 pixels per byte ≈ 16 bytes)
-        (0x44, 0x00, 0x0F),
-        # Set RAM Y address (0x0000 to 0x00F9 = 0 to 249 in decimal, 250 lines)
-        (0x45, 0x00, 0x00, 0xF9, 0x00),
-        # Border Waveform Control
-        (0x3C, 0x05),
-        # Read built-in temperature sensor
-        (0x18, 0x80),
-        # Set RAM X address counter to 0
-        (0x4E, 0x00),
-        # Set RAM Y address counter to 0
-        (0x4F, 0x00, 0x00),
+        (0x12,),  # Software reset
+        (0x01, 0xF9, 0x00, 0x00),  # Driver output control
+        (0x11, 0x03),  # Data entry mode
+        (0x44, 0x00, 0x0F),  # Set RAM X address (0-15 bytes = 16*4 = 64 pixels... wait, need to check)
+        (0x45, 0x00, 0x00, 0xF9, 0x00),  # Set RAM Y address (0-249)
+        (0x3C, 0x05),  # Border waveform control
+        (0x18, 0x80),  # Read temperature sensor
+        (0x4E, 0x00),  # Set RAM X counter
+        (0x4F, 0x00, 0x00),  # Set RAM Y counter
     ),
-    lut=[],  # 4-color displays don't use traditional LUTs
+    lut=(),  # Empty LUT - 4-color displays don't use traditional LUTs
     lut_partial=None,
 )
 

@@ -9,7 +9,7 @@ static const char *const TAG = "epaper_spi.waveshare_4color";
 // Color encoding for 4-color display (2 bits per pixel):
 // Black  = 00 (0)
 // White  = 01 (1)
-// Yellow = 10 (2) - NOTE: Waveshare has Yellow/Red swapped from what I had before!
+// Yellow = 10 (2)
 // Red    = 11 (3)
 
 uint8_t EpaperWaveshare4Color::get_color_bits_(Color color) {
@@ -34,6 +34,29 @@ uint8_t EpaperWaveshare4Color::get_color_bits_(Color color) {
 
   // Default to black
   return 0b00;  // Black
+}
+
+void EpaperWaveshare4Color::fill(Color color) {
+  // CRITICAL FIX: Override fill() for 4-color displays
+  // Base class fill() uses color_to_bit() which only works for monochrome!
+  
+  // Get the 2-bit color value
+  uint8_t color_bits = get_color_bits_(color);
+  
+  // Pack into byte: 4 pixels per byte, same color for all
+  // Bits: [pixel3|pixel2|pixel1|pixel0] = [color|color|color|color]
+  uint8_t fill_byte = (color_bits << 6) | (color_bits << 4) | (color_bits << 2) | color_bits;
+  
+  // Fill entire buffer
+  this->buffer_.fill(fill_byte);
+  
+  // Mark entire display as dirty
+  this->x_low_ = 0;
+  this->y_low_ = 0;
+  this->x_high_ = this->width_;
+  this->y_high_ = this->height_;
+  
+  ESP_LOGD(TAG, "Filled screen with color byte 0x%02X", fill_byte);
 }
 
 void HOT EpaperWaveshare4Color::draw_pixel_at(int x, int y, Color color) {
@@ -100,7 +123,6 @@ void EpaperWaveshare4Color::set_window() {
 
 void EpaperWaveshare4Color::refresh_screen(bool partial) {
   // 4-color displays only support full refresh
-  // CRITICAL FIX: Use Waveshare's refresh command
   this->cmd_data(0x12, {0x00});  // Display refresh: 0x12 with data 0x00
   this->next_delay_ = 15000;      // 15 seconds for 4-color displays
   ESP_LOGD(TAG, "Display refresh initiated (4-color, ~15s)");
@@ -113,8 +135,8 @@ bool HOT EpaperWaveshare4Color::transfer_data() {
     // Set window for the dirty region
     this->set_window();
 
-    // CRITICAL FIX: Use Waveshare's data write command
-    this->command(0x10);  // Write RAM - 0x10, not 0x24!
+    // Use Waveshare's data write command
+    this->command(0x10);  // Write RAM - 0x10 for 4-color
     this->current_data_index_ = this->y_low_;  // Track current line
   }
 

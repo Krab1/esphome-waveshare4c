@@ -19,14 +19,14 @@ class EpaperWaveshare4Color final : public EPaperMono {
         partial_lut_length_(partial_lut_length) {
     // 4-color displays need 2 bits per pixel (4 pixels per byte)
     // Calculate row width in bytes (rounded up to nearest byte)
-    this->row_width_4color_ = (width + 3) / 4;  // For 122: (122 + 3) / 4 = 31 bytes
+    this->row_width_4color_ = (width + 3) / 4;
     
-    // CRITICAL FIX: Buffer must be row_width * height
-    // This ensures we have enough space when rows are aligned to byte boundaries
-    this->buffer_length_ = this->row_width_4color_ * height;  // 31 * 250 = 7750 bytes
+    // Buffer must be row_width * height
+    this->buffer_length_ = this->row_width_4color_ * height;
   }
 
  protected:
+  void fill(Color color) override;  // CRITICAL: Override fill() for 4-color
   void draw_pixel_at(int x, int y, Color color) override;
   bool initialise(bool partial) override;
   void set_window() override;

@@ -14,10 +14,10 @@ class Waveshare4ColorModel(EpaperModel):
         self.lut_partial = lut_partial
 
     def get_constructor_args(self, config) -> tuple:
-        # Same pattern as WaveshareModel - pass LUT arrays
         lut = (
             cg.static_const_array(
-                ID(config[CONF_INIT_SEQUENCE_ID].id + "_lut", type=cg.uint8), self.lut
+                ID(config[CONF_INIT_SEQUENCE_ID].id + "_lut", type=cg.uint8), 
+                self.lut
             ),
             len(self.lut),
         )
@@ -26,9 +26,7 @@ class Waveshare4ColorModel(EpaperModel):
         else:
             lut_partial = (
                 cg.static_const_array(
-                    ID(
-                        config[CONF_INIT_SEQUENCE_ID].id + "_lut_partial", type=cg.uint8
-                    ),
+                    ID(config[CONF_INIT_SEQUENCE_ID].id + "_lut_partial", type=cg.uint8),
                     self.lut_partial,
                 ),
                 len(self.lut_partial),
@@ -36,20 +34,110 @@ class Waveshare4ColorModel(EpaperModel):
         return *lut, *lut_partial
 
 
-# fmt: off
-# Waveshare 2.13inch e-Paper HAT (G) V2 - 124x250, 4-color (Black/White/Yellow/Red)
-# Based on Waveshare's EPD_2in13g_V2.cpp reference implementation
+# =============================================================================
+# VERSION 1: Original Waveshare 2.13" G - Complex Init (2023)
+# =============================================================================
 Waveshare4ColorModel(
-    "waveshare-2.13in-g",
-    width=124,  # CRITICAL FIX: 124 pixels, not 122!
+    "waveshare-2.13in-g-v1",
+    width=124,
     height=250,
     initsequence=(
-        # V2 init sequence - much simpler than V1
-        (0x61, 0x00, 0x7C, 0x00, 0xFA),  # TRES: Resolution 124×250 (0x7C=124, 0xFA=250)
-        (0xE9, 0x01),  # Unknown register
+        (0x4D, 0x78),
+        (0x00, 0x0F, 0x29),  # PSR
+        (0x01, 0x07, 0x00),  # PWRR
+        (0x03, 0x10, 0x54, 0x44),  # POFS
+        (0x06, 0x05, 0x00, 0x3F, 0x0A, 0x25, 0x12, 0x1A),  # BTST_P
+        (0x50, 0x37),  # CDI
+        (0x60, 0x02, 0x02),  # TCON
+        (0x61, 0x00, 0x7C, 0x00, 0xFA),  # TRES: 124×250
+        (0xE7, 0x1C),
+        (0xE3, 0x22),
+        (0xB4, 0xD0),
+        (0xB5, 0x03),
+        (0xE9, 0x01),
+        (0x30, 0x08),
         (0x04,),  # Power on
     ),
-    lut=(),  # Empty LUT - 4-color displays don't use traditional LUTs
+    lut=(),
+    lut_partial=None,
+)
+
+# =============================================================================
+# VERSION 2: Waveshare 2.13" G V2 - Simple Init (2024)
+# =============================================================================
+Waveshare4ColorModel(
+    "waveshare-2.13in-g-v2",
+    width=124,
+    height=250,
+    initsequence=(
+        (0x61, 0x00, 0x7C, 0x00, 0xFA),  # TRES: 124×250
+        (0xE9, 0x01),
+        (0x04,),  # Power on
+    ),
+    lut=(),
+    lut_partial=None,
+)
+
+# =============================================================================
+# VERSION 3: V2 with Fast Init
+# =============================================================================
+Waveshare4ColorModel(
+    "waveshare-2.13in-g-v2-fast",
+    width=124,
+    height=250,
+    initsequence=(
+        (0x61, 0x00, 0x7C, 0x00, 0xFA),  # TRES: 124×250
+        (0xE0, 0x02),  # Fast mode enable
+        (0xE6, 90),    # Cascading setting (90)
+        (0xA5,),       # Check status
+        (0xE9, 0x01),
+        (0x04,),  # Power on
+    ),
+    lut=(),
+    lut_partial=None,
+)
+
+# =============================================================================
+# VERSION 4: 122-pixel width (if your display is actually 122, not 124)
+# =============================================================================
+Waveshare4ColorModel(
+    "waveshare-2.13in-g-122px",
+    width=122,
+    height=250,
+    initsequence=(
+        (0x4D, 0x78),
+        (0x00, 0x0F, 0x29),
+        (0x01, 0x07, 0x00),
+        (0x03, 0x10, 0x54, 0x44),
+        (0x06, 0x05, 0x00, 0x3F, 0x0A, 0x25, 0x12, 0x1A),
+        (0x50, 0x37),
+        (0x60, 0x02, 0x02),
+        (0x61, 0x00, 0x7A, 0x00, 0xFA),  # TRES: 122×250 (0x7A = 122)
+        (0xE7, 0x1C),
+        (0xE3, 0x22),
+        (0xB4, 0xD0),
+        (0xB5, 0x03),
+        (0xE9, 0x01),
+        (0x30, 0x08),
+        (0x04,),
+    ),
+    lut=(),
+    lut_partial=None,
+)
+
+# =============================================================================
+# DEFAULT: Alias for most common version (V2)
+# =============================================================================
+Waveshare4ColorModel(
+    "waveshare-2.13in-g",
+    width=124,
+    height=250,
+    initsequence=(
+        (0x61, 0x00, 0x7C, 0x00, 0xFA),
+        (0xE9, 0x01),
+        (0x04,),
+    ),
+    lut=(),
     lut_partial=None,
 )
 

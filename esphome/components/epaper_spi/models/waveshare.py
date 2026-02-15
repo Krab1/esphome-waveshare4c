@@ -36,10 +36,11 @@ class Waveshare4ColorModel(EpaperModel):
 
 # =============================================================================
 # VERSION 1: Original Waveshare 2.13" G - Complex Init (2023)
+# CRITICAL: Width is 122, not 124!
 # =============================================================================
 Waveshare4ColorModel(
     "waveshare-2.13in-g-v1",
-    width=124,
+    width=122,  # ← FIXED! Was 124
     height=250,
     initsequence=(
         (0x4D, 0x78),
@@ -49,7 +50,7 @@ Waveshare4ColorModel(
         (0x06, 0x05, 0x00, 0x3F, 0x0A, 0x25, 0x12, 0x1A),  # BTST_P
         (0x50, 0x37),  # CDI
         (0x60, 0x02, 0x02),  # TCON
-        (0x61, 0x00, 0x7C, 0x00, 0xFA),  # TRES: 124×250
+        (0x61, 0x00, 0x7A, 0x00, 0xFA),  # TRES: 122×250 (0x7A = 122)
         (0xE7, 0x1C),
         (0xE3, 0x22),
         (0xB4, 0xD0),
@@ -64,13 +65,14 @@ Waveshare4ColorModel(
 
 # =============================================================================
 # VERSION 2: Waveshare 2.13" G V2 - Simple Init (2024)
+# CRITICAL: Width is 122, not 124!
 # =============================================================================
 Waveshare4ColorModel(
     "waveshare-2.13in-g-v2",
-    width=124,
+    width=122,  # ← FIXED! Was 124
     height=250,
     initsequence=(
-        (0x61, 0x00, 0x7C, 0x00, 0xFA),  # TRES: 124×250
+        (0x61, 0x00, 0x7A, 0x00, 0xFA),  # TRES: 122×250 (0x7A = 122)
         (0xE9, 0x01),
         (0x04,),  # Power on
     ),
@@ -83,10 +85,10 @@ Waveshare4ColorModel(
 # =============================================================================
 Waveshare4ColorModel(
     "waveshare-2.13in-g-v2-fast",
-    width=124,
+    width=122,  # ← FIXED! Was 124
     height=250,
     initsequence=(
-        (0x61, 0x00, 0x7C, 0x00, 0xFA),  # TRES: 124×250
+        (0x61, 0x00, 0x7A, 0x00, 0xFA),  # TRES: 122×250
         (0xE0, 0x02),  # Fast mode enable
         (0xE6, 90),    # Cascading setting (90)
         (0xA5,),       # Check status
@@ -98,42 +100,14 @@ Waveshare4ColorModel(
 )
 
 # =============================================================================
-# VERSION 4: 122-pixel width (if your display is actually 122, not 124)
-# =============================================================================
-Waveshare4ColorModel(
-    "waveshare-2.13in-g-122px",
-    width=122,
-    height=250,
-    initsequence=(
-        (0x4D, 0x78),
-        (0x00, 0x0F, 0x29),
-        (0x01, 0x07, 0x00),
-        (0x03, 0x10, 0x54, 0x44),
-        (0x06, 0x05, 0x00, 0x3F, 0x0A, 0x25, 0x12, 0x1A),
-        (0x50, 0x37),
-        (0x60, 0x02, 0x02),
-        (0x61, 0x00, 0x7A, 0x00, 0xFA),  # TRES: 122×250 (0x7A = 122)
-        (0xE7, 0x1C),
-        (0xE3, 0x22),
-        (0xB4, 0xD0),
-        (0xB5, 0x03),
-        (0xE9, 0x01),
-        (0x30, 0x08),
-        (0x04,),
-    ),
-    lut=(),
-    lut_partial=None,
-)
-
-# =============================================================================
 # DEFAULT: Alias for most common version (V2)
 # =============================================================================
 Waveshare4ColorModel(
     "waveshare-2.13in-g",
-    width=124,
+    width=122,  # ← FIXED! Was 124
     height=250,
     initsequence=(
-        (0x61, 0x00, 0x7C, 0x00, 0xFA),
+        (0x61, 0x00, 0x7A, 0x00, 0xFA),  # TRES: 122×250
         (0xE9, 0x01),
         (0x04,),
     ),

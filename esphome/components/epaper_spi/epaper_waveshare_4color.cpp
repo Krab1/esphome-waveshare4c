@@ -133,46 +133,42 @@ bool HOT EpaperWaveshare4Color::transfer_data() {
   auto start_time = millis();
 
   if (this->current_data_index_ == 0) {
-    // Set window for the dirty region
-    this->set_window_();
+    // DON'T set window - just send data like Arduino!
+    // this->set_window_();  ← COMMENT THIS OUT!
 
     // Use Waveshare's data write command for 4-color
     this->command(0x10);  // Write RAM - 0x10 for 4-color
     this->current_data_index_ = this->y_low_;  // Track current line
   }
 
-  // CRITICAL FIX: Round up for widths not divisible by 4
-  // For 122 pixels: (122 + 3) / 4 = 31 bytes
-  size_t row_length = (this->x_high_ - this->x_low_ + 3) / 4;
+  // Send FULL screen width (not just dirty region)
+  size_t row_length = this->row_width_4color_;  // Use full width!
   FixedVector<uint8_t> bytes_to_send{};
   bytes_to_send.init(row_length);
-
-  ESP_LOGV(TAG, "Writing %u bytes at line %zu", row_length, this->current_data_index_);
 
   this->start_data_();
 
   while (this->current_data_index_ != this->y_high_) {
-    // Calculate starting position in buffer
-    size_t data_idx = this->current_data_index_ * this->row_width_4color_ + this->x_low_ / 4;
+    // Calculate starting position in buffer - USE FULL ROW!
+    size_t data_idx = this->current_data_index_ * this->row_width_4color_;
 
-    // Copy row data
+    // Copy FULL row data
     for (size_t i = 0; i != row_length; i++) {
       bytes_to_send[i] = this->buffer_[data_idx + i];
     }
 
     ++this->current_data_index_;
-    this->write_array(&bytes_to_send.front(), row_length);  // NOLINT
+    this->write_array(&bytes_to_send.front(), row_length);
 
-    // Yield to main loop if taking too long
     if (millis() - start_time > MAX_TRANSFER_TIME) {
       this->disable();
-      return false;  // Continue next loop
+      return false;
     }
   }
 
   this->disable();
   this->current_data_index_ = 0;
-  return true;  // Transfer complete
+  return true;
 }
 
 void EpaperWaveshare4Color::deep_sleep() {

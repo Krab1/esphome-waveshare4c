@@ -37,14 +37,16 @@ uint8_t EpaperWaveshare4Color::get_color_bits_(Color color) {
 }
 
 void EpaperWaveshare4Color::fill(Color color) {
-  // CRITICAL FIX: Override fill() for 4-color displays
-  // Base class fill() uses color_to_bit() which only works for monochrome!
+  // If clipping is active, fall back to base implementation
+  if (this->get_clipping().is_set()) {
+    EPaperBase::fill(color);
+    return;
+  }
   
   // Get the 2-bit color value
   uint8_t color_bits = get_color_bits_(color);
   
   // Pack into byte: 4 pixels per byte, same color for all
-  // Bits: [pixel3|pixel2|pixel1|pixel0] = [color|color|color|color]
   uint8_t fill_byte = (color_bits << 6) | (color_bits << 4) | (color_bits << 2) | color_bits;
   
   // Fill entire buffer
@@ -91,11 +93,10 @@ bool EpaperWaveshare4Color::initialise(bool partial) {
     this->cmd_data(0x32, this->lut_, this->lut_length_);
   }
 
-  this->send_red_ = false;  // We don't use separate red buffer for 4-color
   return true;
 }
 
-void EpaperWaveshare4Color::set_window() {
+void EpaperWaveshare4Color::set_window_() {
   // For 4-color displays, align to 4-pixel boundaries (4 pixels per byte)
   this->x_low_ &= ~3;  // Round down to multiple of 4
   this->x_high_ += 3;
@@ -133,15 +134,15 @@ bool HOT EpaperWaveshare4Color::transfer_data() {
 
   if (this->current_data_index_ == 0) {
     // Set window for the dirty region
-    this->set_window();
+    this->set_window_();
 
-    // Use Waveshare's data write command
+    // Use Waveshare's data write command for 4-color
     this->command(0x10);  // Write RAM - 0x10 for 4-color
     this->current_data_index_ = this->y_low_;  // Track current line
   }
 
-  // CRITICAL FIX: Round up to handle width not divisible by 4
-  // For 122 pixels: (122 + 3) / 4 = 31 bytes (not 30!)
+  // CRITICAL FIX: Round up for widths not divisible by 4
+  // For 122 pixels: (122 + 3) / 4 = 31 bytes
   size_t row_length = (this->x_high_ - this->x_low_ + 3) / 4;
   FixedVector<uint8_t> bytes_to_send{};
   bytes_to_send.init(row_length);
@@ -172,6 +173,13 @@ bool HOT EpaperWaveshare4Color::transfer_data() {
   this->disable();
   this->current_data_index_ = 0;
   return true;  // Transfer complete
+}
+
+void EpaperWaveshare4Color::deep_sleep() {
+  ESP_LOGV(TAG, "Deep sleep");
+  this->cmd_data(0x02, {0x00});  // Power off
+  // Note: Busy wait is handled by state machine
+  this->cmd_data(0x07, {0xA5});  // Deep sleep
 }
 
 }  // namespace esphome::epaper_spi

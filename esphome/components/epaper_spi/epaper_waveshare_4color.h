@@ -1,18 +1,20 @@
 #pragma once
 #include "epaper_spi.h"
-#include "epaper_spi_mono.h"
 
 namespace esphome::epaper_spi {
 /**
  * Waveshare 4-color e-paper display driver.
  * Handles 4 colors (Black, White, Red, Yellow) using 2 bits per pixel.
+ * 
+ * CRITICAL: Inherits from EPaperBase, NOT EPaperMono!
+ * 4-color displays use completely different buffer layout and commands.
  */
-class EpaperWaveshare4Color final : public EPaperMono {
+class EpaperWaveshare4Color final : public EPaperBase {
  public:
   EpaperWaveshare4Color(const char *name, uint16_t width, uint16_t height, const uint8_t *init_sequence,
                         size_t init_sequence_length, const uint8_t *lut, size_t lut_length,
                         const uint8_t *partial_lut, uint16_t partial_lut_length)
-      : EPaperMono(name, width, height, init_sequence, init_sequence_length),
+      : EPaperBase(name, width, height, init_sequence, init_sequence_length, DISPLAY_TYPE_COLOR),
         lut_(lut),
         lut_length_(lut_length),
         partial_lut_(partial_lut),
@@ -26,15 +28,20 @@ class EpaperWaveshare4Color final : public EPaperMono {
   }
 
  protected:
-  void fill(Color color) override;  // CRITICAL: Override fill() for 4-color
+  void fill(Color color) override;
   void draw_pixel_at(int x, int y, Color color) override;
   bool initialise(bool partial) override;
-  void set_window() override;
   void refresh_screen(bool partial) override;
   bool transfer_data() override;
+  
+  // Power control methods (required by EPaperBase)
+  void power_on() override {}   // Power on handled in init
+  void power_off() override {}  // Power off handled in deep_sleep
+  void deep_sleep() override;
 
  private:
   uint8_t get_color_bits_(Color color);
+  void set_window_();
   
   const uint8_t *lut_;
   size_t lut_length_;

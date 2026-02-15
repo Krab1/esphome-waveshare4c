@@ -140,7 +140,9 @@ bool HOT EpaperWaveshare4Color::transfer_data() {
     this->current_data_index_ = this->y_low_;  // Track current line
   }
 
-  size_t row_length = (this->x_high_ - this->x_low_) / 4;  // 4 pixels per byte
+  // CRITICAL FIX: Round up to handle width not divisible by 4
+  // For 122 pixels: (122 + 3) / 4 = 31 bytes (not 30!)
+  size_t row_length = (this->x_high_ - this->x_low_ + 3) / 4;
   FixedVector<uint8_t> bytes_to_send{};
   bytes_to_send.init(row_length);
 

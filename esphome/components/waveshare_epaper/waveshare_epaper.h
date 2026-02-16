@@ -1106,12 +1106,15 @@ class WaveshareEPaper2P13InGV2 : public WaveshareEPaper7C {
   void dump_config() override;
   void deep_sleep() override;
   
+  // Support for fast initialization mode
   void set_fast_mode(bool fast_mode) { this->fast_mode_ = fast_mode; }
 
  protected:
   int get_width_internal() override;
   int get_height_internal() override;
   
+  // Color mapping for 4-color display
+  // Black = 0x0, White = 0x1, Yellow = 0x2, Red = 0x3
   uint8_t get_color_code(Color color);
 
  private:

@@ -24,7 +24,7 @@ void WaveshareEPaper2P13InGV2::setup() {
   this->reset_();
   delay(200);
   
-  ESP_LOGI(TAG, "Initializing 2.13\" G V2 (122x250, 4-color)");
+  ESP_LOGI(TAG, "Initializing 2.13\" G V2 (250x122, 4-color)");
   
   // Wait for display to be ready after reset
   delay(100);
@@ -32,9 +32,9 @@ void WaveshareEPaper2P13InGV2::setup() {
   // Set resolution (TRES command)
   this->command(CMD_TRES);
   this->data(0x00);  // Width high byte
-  this->data(0x7A);  // Width low byte (122 = 0x7A)
+  this->data(0xFA);  // Width low byte (250 = 0xFA)
   this->data(0x00);  // Height high byte
-  this->data(0xFA);  // Height low byte (250 = 0xFA)
+  this->data(0x7A);  // Height low byte (122 = 0x7A)
   
   // Additional initialization
   this->command(CMD_E9);
@@ -61,8 +61,8 @@ void WaveshareEPaper2P13InGV2::display() {
   this->command(CMD_WRITE_RAM);
   
   // Calculate bytes per line (4 pixels per byte, so width/4)
-  // 122 pixels / 4 = 30.5, round up to 31 bytes
-  const uint16_t width_bytes = 31;
+  // 250 pixels / 4 = 62.5, round up to 63 bytes
+  const uint16_t width_bytes = 63;
   const uint16_t height = this->get_height_internal();
   
   this->start_data_();
@@ -95,7 +95,7 @@ void WaveshareEPaper2P13InGV2::display() {
 void WaveshareEPaper2P13InGV2::dump_config() {
   LOG_DISPLAY("", "Waveshare E-Paper", this);
   ESP_LOGCONFIG(TAG, "  Model: 2.13in G V2 (4-color)");
-  ESP_LOGCONFIG(TAG, "  Resolution: 122x250");
+  ESP_LOGCONFIG(TAG, "  Resolution: 250x122");
   ESP_LOGCONFIG(TAG, "  Colors: Black, White, Red, Yellow");
   LOG_PIN("  CS Pin: ", this->cs_);
   LOG_PIN("  Reset Pin: ", this->reset_pin_);
@@ -111,17 +111,17 @@ void WaveshareEPaper2P13InGV2::deep_sleep() {
 }
 
 int WaveshareEPaper2P13InGV2::get_width_internal() { 
-  return 122; 
+  return 250;  // Display is 250 pixels wide
 }
 
 int WaveshareEPaper2P13InGV2::get_height_internal() { 
-  return 250; 
+  return 122;  // Display is 122 pixels tall
 }
 
 uint32_t WaveshareEPaper2P13InGV2::get_buffer_length_() {
   // 4 pixels per byte (2 bits per pixel)
-  // 122 pixels / 4 = 30.5, round up to 31 bytes per line
-  return 31 * this->get_height_internal();
+  // 250 pixels / 4 = 62.5, round up to 63 bytes per line
+  return 63 * this->get_height_internal();  // 63 * 122 = 7,686 bytes
 }
 
 uint32_t WaveshareEPaper2P13InGV2::idle_timeout_() { 
@@ -170,7 +170,7 @@ void WaveshareEPaper2P13InGV2::draw_absolute_pixel_internal(int x, int y, Color 
   }
   
   // 4 pixels per byte (2 bits per pixel)
-  const uint16_t width_bytes = 31;
+  const uint16_t width_bytes = 63;  // 250 / 4 = 62.5, round up to 63
   uint16_t byte_index = y * width_bytes + (x / 4);
   uint8_t bit_offset = (3 - (x % 4)) * 2;  // 2 bits per pixel
   

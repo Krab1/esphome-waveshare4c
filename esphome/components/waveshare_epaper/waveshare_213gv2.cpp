@@ -1,4 +1,4 @@
-#include "waveshare_2in13gv2.h"
+#include "waveshare_213gv2.h"
 #include "esphome/core/log.h"
 #include "esphome/core/application.h"
 

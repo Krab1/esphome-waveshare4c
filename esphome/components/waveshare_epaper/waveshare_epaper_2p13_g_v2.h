@@ -31,7 +31,7 @@ class WaveshareEPaper2P13InGV2 : public WaveshareEPaperBase {
   int get_width_internal() override;
   int get_height_internal() override;
   
-  void reset_() override {
+  void reset_() {
     if (this->reset_pin_ != nullptr) {
       this->reset_pin_->digital_write(true);
       delay(200);  // NOLINT

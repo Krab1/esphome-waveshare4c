@@ -26,6 +26,9 @@ void WaveshareEPaper2P13InGV2::setup() {
   
   ESP_LOGI(TAG, "Initializing 2.13\" G V2 (122x250, 4-color)");
   
+  // Wait for display to be ready after reset
+  delay(100);
+  
   // Set resolution (TRES command)
   this->command(CMD_TRES);
   this->data(0x00);  // Width high byte
@@ -40,6 +43,9 @@ void WaveshareEPaper2P13InGV2::setup() {
   // Power on
   this->command(CMD_POWER_ON);
   this->wait_until_idle_();
+  
+  // Clear the buffer with white to prevent random pixels
+  this->fill(Color(255, 255, 255));
   
   ESP_LOGI(TAG, "Initialization complete");
 }

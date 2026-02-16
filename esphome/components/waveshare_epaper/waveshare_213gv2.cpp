@@ -24,17 +24,17 @@ void WaveshareEPaper2P13InGV2::setup() {
   this->reset_();
   delay(200);
   
-  ESP_LOGI(TAG, "Initializing 2.13\" G V2 (250x122, 4-color)");
+  ESP_LOGI(TAG, "Initializing 2.13\" G V2 (122x250 controller, 4-color)");
   
   // Wait for display to be ready after reset
   delay(100);
   
-  // Set resolution (TRES command)
+  // Set resolution (TRES command) - EXACTLY as Arduino does
   this->command(CMD_TRES);
   this->data(0x00);  // Width high byte
-  this->data(0xFA);  // Width low byte (250 = 0xFA)
+  this->data(0x7A);  // Width low byte (122 = 0x7A)
   this->data(0x00);  // Height high byte
-  this->data(0x7A);  // Height low byte (122 = 0x7A)
+  this->data(0xFA);  // Height low byte (250 = 0xFA)
   
   // Additional initialization
   this->command(CMD_E9);
@@ -60,33 +60,31 @@ void WaveshareEPaper2P13InGV2::display() {
   // Write buffer to display RAM
   this->command(CMD_WRITE_RAM);
   
-  // Calculate bytes per line (4 pixels per byte, so width/4)
-  // 250 pixels / 4 = 62.5, round up to 63 bytes
-  const uint16_t width_bytes = 63;
-  const uint16_t height = this->get_height_internal();
+  // EXACTLY as Arduino: 31 bytes per line, 250 lines
+  const uint16_t width_bytes = 31;  // 122 / 4 = 30.5, round up to 31
+  const uint16_t height = 250;
   
   this->start_data_();
   
-  // Send the buffer data
-  // The buffer stores 2 bits per pixel (4 colors)
+  // Send buffer data line by line, EXACTLY as Arduino does
   for (uint16_t y = 0; y < height; y++) {
     for (uint16_t x = 0; x < width_bytes; x++) {
       uint16_t idx = y * width_bytes + x;
       if (idx < this->get_buffer_length_()) {
         this->write_byte(this->buffer_[idx]);
       } else {
-        this->write_byte(0xFF);  // White fill for any remaining bytes
+        this->write_byte(0xFF);  // White fill
       }
     }
   }
   
   this->end_data_();
   
-  // Trigger refresh
+  // Trigger refresh - EXACTLY as Arduino
   this->command(CMD_REFRESH);
   this->data(0x00);
   
-  // Wait for display to be ready
+  // Wait for display
   this->wait_until_idle_();
   
   ESP_LOGI(TAG, "Display update complete");
@@ -95,7 +93,7 @@ void WaveshareEPaper2P13InGV2::display() {
 void WaveshareEPaper2P13InGV2::dump_config() {
   LOG_DISPLAY("", "Waveshare E-Paper", this);
   ESP_LOGCONFIG(TAG, "  Model: 2.13in G V2 (4-color)");
-  ESP_LOGCONFIG(TAG, "  Resolution: 250x122");
+  ESP_LOGCONFIG(TAG, "  Controller Resolution: 122x250");
   ESP_LOGCONFIG(TAG, "  Colors: Black, White, Red, Yellow");
   LOG_PIN("  CS Pin: ", this->cs_);
   LOG_PIN("  Reset Pin: ", this->reset_pin_);
@@ -111,17 +109,18 @@ void WaveshareEPaper2P13InGV2::deep_sleep() {
 }
 
 int WaveshareEPaper2P13InGV2::get_width_internal() { 
-  return 250;  // Display is 250 pixels wide
+  return 122;  // Controller width (even if physical display is rotated)
 }
 
 int WaveshareEPaper2P13InGV2::get_height_internal() { 
-  return 122;  // Display is 122 pixels tall
+  return 250;  // Controller height (even if physical display is rotated)
 }
 
 uint32_t WaveshareEPaper2P13InGV2::get_buffer_length_() {
   // 4 pixels per byte (2 bits per pixel)
-  // 250 pixels / 4 = 62.5, round up to 63 bytes per line
-  return 63 * this->get_height_internal();  // 63 * 122 = 7,686 bytes
+  // 122 pixels / 4 = 30.5, round up to 31 bytes per line
+  // MUST match Arduino: 31 bytes × 250 lines = 7,750 bytes
+  return 31 * 250;
 }
 
 uint32_t WaveshareEPaper2P13InGV2::idle_timeout_() { 
@@ -169,8 +168,8 @@ void WaveshareEPaper2P13InGV2::draw_absolute_pixel_internal(int x, int y, Color 
     return;
   }
   
-  // 4 pixels per byte (2 bits per pixel)
-  const uint16_t width_bytes = 63;  // 250 / 4 = 62.5, round up to 63
+  // EXACTLY as Arduino buffer layout: 31 bytes per line
+  const uint16_t width_bytes = 31;  // 122 / 4 = 30.5, round up to 31
   uint16_t byte_index = y * width_bytes + (x / 4);
   uint8_t bit_offset = (3 - (x % 4)) * 2;  // 2 bits per pixel
   

@@ -22,7 +22,7 @@ void WaveshareEPaper2P13InGV2::initialize() {
   
   this->init_internal_(this->get_buffer_length_());
   
-  // Do initial reset and basic setup
+  // Do initial reset and full initialization
   ESP_LOGD(TAG, "Resetting display");
   this->reset_();
   
@@ -43,6 +43,16 @@ void WaveshareEPaper2P13InGV2::initialize() {
   // Power on
   ESP_LOGD(TAG, "Powering on display");
   this->command(0x04);
+  this->wait_until_idle_();
+  
+  // Clear the display once
+  ESP_LOGD(TAG, "Initial clear");
+  this->command(0x10);
+  for (uint16_t i = 0; i < 31 * EPD_HEIGHT; i++) {
+    this->data(0x55);  // White fill pattern (0x55 = 01010101 = white,white,white,white)
+  }
+  this->command(0x12);  // Refresh
+  this->data(0x00);
   this->wait_until_idle_();
   
   ESP_LOGI(TAG, "Display initialization complete");
@@ -90,16 +100,24 @@ void WaveshareEPaper2P13InGV2::dump_config() {
 }
 
 void HOT WaveshareEPaper2P13InGV2::display() {
-  ESP_LOGD(TAG, "Starting display update");
+  ESP_LOGD(TAG, "Starting display update #%d", this->at_update_ + 1);
   
   // Calculate buffer dimensions
-  // Width in bytes: each byte contains 4 pixels (2 bits per pixel)
   uint16_t width_bytes = (EPD_WIDTH % 4 == 0) ? (EPD_WIDTH / 4) : (EPD_WIDTH / 4 + 1);
   
-  // Track update count for full/fast mode switching
+  // Track update count
   this->at_update_++;
+  
+  // Check if we need to switch to fast mode (only do this ONCE after first update)
+  if (this->at_update_ == 1 && this->full_update_every_ > 1) {
+    ESP_LOGI(TAG, "Switching to fast refresh mode");
+    this->init_fast_();
+  }
+  
+  // Reset counter for periodic full updates
   if (this->at_update_ >= this->full_update_every_) {
     this->at_update_ = 0;
+    // Could add full update logic here if needed, but for now just reset counter
   }
   
   // Start data transmission - command 0x10
@@ -108,8 +126,6 @@ void HOT WaveshareEPaper2P13InGV2::display() {
   // Send image data
   for (uint16_t y = 0; y < EPD_HEIGHT; y++) {
     for (uint16_t x = 0; x < width_bytes; x++) {
-      // The display only uses the first 31 bytes per row
-      // This matches the original driver behavior
       if (x < 31) {
         uint8_t byte_data = this->buffer_[x + y * width_bytes];
         this->data(byte_data);
@@ -121,7 +137,7 @@ void HOT WaveshareEPaper2P13InGV2::display() {
   
   ESP_LOGD(TAG, "Data sent, refreshing display");
   
-  // Turn on display (refresh)
+  // Refresh display
   this->turn_on_display_();
   
   ESP_LOGD(TAG, "Display update complete");

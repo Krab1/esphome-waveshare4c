@@ -7,17 +7,7 @@ from esphome.core import ID
 from ..display import CONF_INIT_SEQUENCE_ID
 from . import EpaperModel
 
-# Waveshare 2.13-G V2
-jd79660.extend(
-    "Waveshare-2.13in-G-V23",
-    width=122,
-    height=250,
-    initsequence=(
-        (0x61, 0x00, 0x7A, 0x00, 0xFA,),  # Resolution: 122x250
-        (0xE9, 0x01,),                     # Enable features
-        (0x04,),                           # Power on
-    ),
-)
+
 
 class JD79660(EpaperModel):
     def __init__(self, name, class_name="EPaperJD79660", fast_update=None, **kwargs):
@@ -93,5 +83,17 @@ jd79660.extend(
         (0xE0, 0x02,),
         (0xE6, 0x5D,),
         (0xA5, 0x00,),
+    ),
+)
+
+# Waveshare 2.13-G V2
+jd79660.extend(
+    "Waveshare-2.13in-G-V23",
+    width=122,
+    height=250,
+    initsequence=(
+        (0x61, 0x00, 0x7A, 0x00, 0xFA,),  # Resolution: 122x250
+        (0xE9, 0x01,),                     # Enable features
+        (0x04,),                           # Power on
     ),
 )

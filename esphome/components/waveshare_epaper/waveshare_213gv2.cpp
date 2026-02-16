@@ -1,4 +1,4 @@
-#include "waveshare_213gv2.h"
+#include "waveshare_epaper_2p13_g_v2.h"
 #include "esphome/core/log.h"
 #include "esphome/core/application.h"
 
@@ -21,6 +21,12 @@ void WaveshareEPaper2P13InGV2::initialize() {
   ESP_LOGI(TAG, "Initializing display...");
   
   this->init_internal_(this->get_buffer_length_());
+  
+  // Reset flag
+  this->fast_mode_enabled_ = false;
+  this->at_update_ = 0;
+  
+  ESP_LOGD(TAG, "full_update_every is set to: %d", this->full_update_every_);
   
   // Do initial reset and full initialization
   ESP_LOGD(TAG, "Resetting display");
@@ -55,7 +61,7 @@ void WaveshareEPaper2P13InGV2::initialize() {
   this->data(0x00);
   this->wait_until_idle_();
   
-  ESP_LOGI(TAG, "Display initialization complete");
+  ESP_LOGI(TAG, "Display initialization complete, fast mode will activate after first display");
 }
 
 void WaveshareEPaper2P13InGV2::init_fast_() {
@@ -100,7 +106,9 @@ void WaveshareEPaper2P13InGV2::dump_config() {
 }
 
 void HOT WaveshareEPaper2P13InGV2::display() {
-  ESP_LOGD(TAG, "Starting display update #%d", this->at_update_ + 1);
+  ESP_LOGD(TAG, "=== Display called ===");
+  ESP_LOGD(TAG, "at_update_: %d, fast_mode_enabled_: %d, full_update_every_: %d", 
+           this->at_update_, this->fast_mode_enabled_, this->full_update_every_);
   
   // Calculate buffer dimensions
   uint16_t width_bytes = (EPD_WIDTH % 4 == 0) ? (EPD_WIDTH / 4) : (EPD_WIDTH / 4 + 1);
@@ -108,16 +116,17 @@ void HOT WaveshareEPaper2P13InGV2::display() {
   // Track update count
   this->at_update_++;
   
-  // Check if we need to switch to fast mode (only do this ONCE after first update)
-  if (this->at_update_ == 1 && this->full_update_every_ > 1) {
-    ESP_LOGI(TAG, "Switching to fast refresh mode");
+  // Switch to fast mode after first display (if fast mode is enabled)
+  if (!this->fast_mode_enabled_ && this->at_update_ >= 1 && this->full_update_every_ > 1) {
+    ESP_LOGI(TAG, "*** SWITCHING TO FAST REFRESH MODE ***");
     this->init_fast_();
+    this->fast_mode_enabled_ = true;
   }
   
   // Reset counter for periodic full updates
   if (this->at_update_ >= this->full_update_every_) {
+    ESP_LOGD(TAG, "Resetting update counter (was %d)", this->at_update_);
     this->at_update_ = 0;
-    // Could add full update logic here if needed, but for now just reset counter
   }
   
   // Start data transmission - command 0x10

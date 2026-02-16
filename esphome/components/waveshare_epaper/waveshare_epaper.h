@@ -1099,5 +1099,26 @@ class WaveshareEPaper13P3InK : public WaveshareEPaper {
   uint32_t idle_timeout_() override;
 };
 
+class WaveshareEPaper2P13InGV2 : public WaveshareEPaper7C {
+ public:
+  void initialize() override;
+  void display() override;
+  void dump_config() override;
+  void deep_sleep() override;
+  
+  void set_fast_mode(bool fast_mode) { this->fast_mode_ = fast_mode; }
+
+ protected:
+  int get_width_internal() override;
+  int get_height_internal() override;
+  
+  uint8_t get_color_code(Color color);
+
+ private:
+  void init_display_();
+  void turn_on_display_();
+  bool fast_mode_{false};
+};
+
 }  // namespace waveshare_epaper
 }  // namespace esphome

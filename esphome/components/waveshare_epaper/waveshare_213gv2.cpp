@@ -65,10 +65,16 @@ void WaveshareEPaper2P13InGV2::initialize() {
 }
 
 void WaveshareEPaper2P13InGV2::init_fast_() {
+  ESP_LOGI(TAG, "=== Starting Fast Mode Initialization ===");
+  
   this->reset_();
+  ESP_LOGD(TAG, "Fast mode: Reset complete");
+  
   this->wait_until_idle_();
+  ESP_LOGD(TAG, "Fast mode: Display ready");
   
   // Set resolution - TRES command (0x61)
+  ESP_LOGD(TAG, "Fast mode: Setting resolution");
   this->command(0x61);
   this->data(0x00);  // WIDTH_H
   this->data(0x7C);  // WIDTH_L (122 = 0x7C)
@@ -76,21 +82,29 @@ void WaveshareEPaper2P13InGV2::init_fast_() {
   this->data(0xFA);  // HEIGHT_L (250 = 0xFA)
   
   // Fast refresh settings
+  ESP_LOGD(TAG, "Fast mode: Configuring fast refresh (0xE0)");
   this->command(0xE0);
   this->data(0x02);
   
+  ESP_LOGD(TAG, "Fast mode: Setting refresh parameter (0xE6)");
   this->command(0xE6);
   this->data(90);
   
+  ESP_LOGD(TAG, "Fast mode: Sending 0xA5 command");
   this->command(0xA5);
   this->wait_until_idle_();
+  ESP_LOGD(TAG, "Fast mode: 0xA5 complete");
   
+  ESP_LOGD(TAG, "Fast mode: Sending 0xE9 command");
   this->command(0xE9);
   this->data(0x01);
   
   // Power on
+  ESP_LOGD(TAG, "Fast mode: Powering on");
   this->command(0x04);
   this->wait_until_idle_();
+  
+  ESP_LOGI(TAG, "=== Fast Mode Initialization Complete ===");
 }
 
 void WaveshareEPaper2P13InGV2::dump_config() {

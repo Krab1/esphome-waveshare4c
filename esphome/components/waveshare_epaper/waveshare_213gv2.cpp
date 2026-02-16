@@ -1,4 +1,4 @@
-#include "waveshare_213gv2.h"
+#include "waveshare_epaper_2p13_g_v2.h"
 #include "esphome/core/log.h"
 #include "esphome/core/application.h"
 
@@ -20,32 +20,23 @@ static const uint8_t COLOR_RED = 0x3;
 void WaveshareEPaper2P13InGV2::initialize() {
   this->init_internal_(this->get_buffer_length_());
   
-  // Reset
+  // Do initial reset and basic setup
   this->reset_();
-  
-  // Wait for busy
   this->wait_until_idle_();
   
-  if (this->at_update_ == 0) {
-    // Full initialization
-    // Set resolution - TRES command (0x61)
-    this->command(0x61);
-    this->data(0x00);  // WIDTH_H
-    this->data(0x7C);  // WIDTH_L (122 = 0x7C)
-    this->data(0x00);  // HEIGHT_H  
-    this->data(0xFA);  // HEIGHT_L (250 = 0xFA)
-    
-    // Unknown command from datasheet
-    this->command(0xE9);
-    this->data(0x01);
-    
-    // Power on
-    this->command(0x04);
-    this->wait_until_idle_();
-  } else {
-    // Fast refresh initialization
-    this->init_fast_();
-  }
+  // Set resolution - TRES command (0x61)
+  this->command(0x61);
+  this->data(0x00);  // WIDTH_H
+  this->data(0x7C);  // WIDTH_L (122 = 0x7C)
+  this->data(0x00);  // HEIGHT_H  
+  this->data(0xFA);  // HEIGHT_L (250 = 0xFA)
+  
+  this->command(0xE9);
+  this->data(0x01);
+  
+  // Power on
+  this->command(0x04);
+  this->wait_until_idle_();
 }
 
 void WaveshareEPaper2P13InGV2::init_fast_() {
@@ -96,8 +87,59 @@ void HOT WaveshareEPaper2P13InGV2::display() {
   
   // Check if full update is needed
   this->at_update_++;
+  bool do_full_update = false;
   if (this->at_update_ >= this->full_update_every_) {
     this->at_update_ = 0;
+    do_full_update = true;
+  }
+  
+  // Initialize display before each update (critical to prevent flashing)
+  if (do_full_update || this->at_update_ == 1) {
+    // Full initialization for first update or periodic full refresh
+    this->reset_();
+    this->wait_until_idle_();
+    
+    // Set resolution - TRES command (0x61)
+    this->command(0x61);
+    this->data(0x00);  // WIDTH_H
+    this->data(0x7C);  // WIDTH_L (122 = 0x7C)
+    this->data(0x00);  // HEIGHT_H  
+    this->data(0xFA);  // HEIGHT_L (250 = 0xFA)
+    
+    this->command(0xE9);
+    this->data(0x01);
+    
+    // Power on
+    this->command(0x04);
+    this->wait_until_idle_();
+  } else {
+    // Fast refresh initialization for subsequent updates
+    this->reset_();
+    this->wait_until_idle_();
+    
+    // Set resolution
+    this->command(0x61);
+    this->data(0x00);
+    this->data(0x7C);
+    this->data(0x00);
+    this->data(0xFA);
+    
+    // Fast refresh settings
+    this->command(0xE0);
+    this->data(0x02);
+    
+    this->command(0xE6);
+    this->data(90);
+    
+    this->command(0xA5);
+    this->wait_until_idle_();
+    
+    this->command(0xE9);
+    this->data(0x01);
+    
+    // Power on
+    this->command(0x04);
+    this->wait_until_idle_();
   }
   
   // Start data transmission - command 0x10

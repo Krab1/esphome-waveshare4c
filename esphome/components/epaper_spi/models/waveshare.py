@@ -92,5 +92,8 @@ EpaperModel(
     class_name="EPaper213GV2",
     width=122,
     height=250,
-    initsequence=(),  # Init is handled in C++ code
+    # Empty init sequence - initialization is handled in C++ initialise() method
+    initsequence=(),
+    # Optional: specify minimum update interval
+    minimum_update_interval="5s",
 )

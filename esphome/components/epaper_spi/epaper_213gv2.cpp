@@ -8,7 +8,7 @@ namespace esphome::epaper_spi {
 static const char *const TAG = "epaper_spi.213gv2";
 
 bool EPaper213GV2::initialise(bool partial) {
-  // Send base init sequence
+  // Send base init sequence if provided
   EPaperBase::initialise(partial);
   
   if (partial) {
@@ -19,16 +19,13 @@ bool EPaper213GV2::initialise(bool partial) {
     // Set resolution - TRES command (0x61)
     this->cmd_data(0x61, {
       0x00,  // WIDTH_H
-      0x7C,  // WIDTH_L (122 = 0x7C)
+      0x7A,  // WIDTH_L (122 = 0x7A)
       0x00,  // HEIGHT_H  
       0xFA   // HEIGHT_L (250 = 0xFA)
     });
     
     // Unknown command from datasheet
     this->cmd_data(0xE9, {0x01});
-    
-    // Power on
-    this->command(0x04);
   }
   
   return true;
@@ -38,7 +35,7 @@ void EPaper213GV2::init_fast_() {
   // Set resolution - TRES command (0x61)
   this->cmd_data(0x61, {
     0x00,  // WIDTH_H
-    0x7C,  // WIDTH_L (122 = 0x7C)
+    0x7A,  // WIDTH_L (122 = 0x7A)
     0x00,  // HEIGHT_H  
     0xFA   // HEIGHT_L (250 = 0xFA)
   });
@@ -49,9 +46,6 @@ void EPaper213GV2::init_fast_() {
   
   this->command(0xA5);
   this->cmd_data(0xE9, {0x01});
-  
-  // Power on
-  this->command(0x04);
 }
 
 bool HOT EPaper213GV2::transfer_data() {
@@ -95,23 +89,29 @@ bool HOT EPaper213GV2::transfer_data() {
 }
 
 void EPaper213GV2::power_on() {
-  // Power is controlled via the 0x04 command in initialise()
-  // No separate power on needed
+  ESP_LOGV(TAG, "Power on");
+  // Power on command
+  this->command(0x04);
+  // The state machine will automatically wait for busy pin after this
 }
 
 void EPaper213GV2::refresh_screen(bool partial) {
+  ESP_LOGV(TAG, "Refresh screen");
   // Display refresh command
   this->cmd_data(0x12, {0x00});
+  // The state machine will automatically wait for busy pin after this
 }
 
 void EPaper213GV2::power_off() {
-  // Power off
+  ESP_LOGV(TAG, "Power off");
+  // Power off command
   this->cmd_data(0x02, {0x00});
   this->next_delay_ = 100;  // Required delay
 }
 
 void EPaper213GV2::deep_sleep() {
-  // Deep sleep
+  ESP_LOGV(TAG, "Deep sleep");
+  // Deep sleep command
   this->cmd_data(0x07, {0xA5});
 }
 

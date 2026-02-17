@@ -18,41 +18,63 @@ static const uint8_t COLOR_YELLOW = 0x2;
 static const uint8_t COLOR_RED = 0x3;
 
 void WaveshareEPaper2P13InGV2::initialize() {
+  ESP_LOGI(TAG, "Initializing display...");
+  
   this->init_internal_(this->get_buffer_length_());
   
-  // Reset
+  // Reset flag
+  this->fast_mode_enabled_ = false;
+  this->at_update_ = 0;
+  
+  ESP_LOGD(TAG, "full_update_every is set to: %d", this->full_update_every_);
+  
+  // Do initial reset and full initialization
+  ESP_LOGD(TAG, "Resetting display");
   this->reset_();
   
-  // Wait for busy
-  this->wait_until_idle_();
-  
-  if (this->at_update_ == 0) {
-    // Full initialization
-    // Set resolution - TRES command (0x61)
-    this->command(0x61);
-    this->data(0x00);  // WIDTH_H
-    this->data(0x7C);  // WIDTH_L (122 = 0x7C)
-    this->data(0x00);  // HEIGHT_H  
-    this->data(0xFA);  // HEIGHT_L (250 = 0xFA)
-    
-    // Unknown command from datasheet
-    this->command(0xE9);
-    this->data(0x01);
-    
-    // Power on
-    this->command(0x04);
-    this->wait_until_idle_();
-  } else {
-    // Fast refresh initialization
-    this->init_fast_();
-  }
-}
-
-void WaveshareEPaper2P13InGV2::init_fast_() {
-  this->reset_();
+  ESP_LOGD(TAG, "Waiting for display ready");
   this->wait_until_idle_();
   
   // Set resolution - TRES command (0x61)
+  ESP_LOGD(TAG, "Setting resolution: %dx%d", EPD_WIDTH, EPD_HEIGHT);
+  this->command(0x61);
+  this->data(0x00);  // WIDTH_H
+  this->data(0x7C);  // WIDTH_L (122 = 0x7C)
+  this->data(0x00);  // HEIGHT_H  
+  this->data(0xFA);  // HEIGHT_L (250 = 0xFA)
+  
+  this->command(0xE9);
+  this->data(0x01);
+  
+  // Power on
+  ESP_LOGD(TAG, "Powering on display");
+  this->command(0x04);
+  this->wait_until_idle_();
+  
+  // Clear the display once
+  ESP_LOGD(TAG, "Initial clear");
+  this->command(0x10);
+  for (uint16_t i = 0; i < 31 * EPD_HEIGHT; i++) {
+    this->data(0x55);  // White fill pattern (0x55 = 01010101 = white,white,white,white)
+  }
+  this->command(0x12);  // Refresh
+  this->data(0x00);
+  this->wait_until_idle_();
+  
+  ESP_LOGI(TAG, "Display initialization complete, fast mode will activate after first display");
+}
+
+void WaveshareEPaper2P13InGV2::init_fast_() {
+  ESP_LOGI(TAG, "=== Starting Fast Mode Initialization ===");
+  
+  this->reset_();
+  ESP_LOGD(TAG, "Fast mode: Reset complete");
+  
+  this->wait_until_idle_();
+  ESP_LOGD(TAG, "Fast mode: Display ready");
+  
+  // Set resolution - TRES command (0x61)
+  ESP_LOGD(TAG, "Fast mode: Setting resolution");
   this->command(0x61);
   this->data(0x00);  // WIDTH_H
   this->data(0x7C);  // WIDTH_L (122 = 0x7C)
@@ -60,21 +82,29 @@ void WaveshareEPaper2P13InGV2::init_fast_() {
   this->data(0xFA);  // HEIGHT_L (250 = 0xFA)
   
   // Fast refresh settings
+  ESP_LOGD(TAG, "Fast mode: Configuring fast refresh (0xE0)");
   this->command(0xE0);
   this->data(0x02);
   
+  ESP_LOGD(TAG, "Fast mode: Setting refresh parameter (0xE6)");
   this->command(0xE6);
   this->data(90);
   
+  ESP_LOGD(TAG, "Fast mode: Sending 0xA5 command");
   this->command(0xA5);
   this->wait_until_idle_();
+  ESP_LOGD(TAG, "Fast mode: 0xA5 complete");
   
+  ESP_LOGD(TAG, "Fast mode: Sending 0xE9 command");
   this->command(0xE9);
   this->data(0x01);
   
   // Power on
+  ESP_LOGD(TAG, "Fast mode: Powering on");
   this->command(0x04);
   this->wait_until_idle_();
+  
+  ESP_LOGI(TAG, "=== Fast Mode Initialization Complete ===");
 }
 
 void WaveshareEPaper2P13InGV2::dump_config() {
@@ -90,13 +120,26 @@ void WaveshareEPaper2P13InGV2::dump_config() {
 }
 
 void HOT WaveshareEPaper2P13InGV2::display() {
+  ESP_LOGD(TAG, "=== Display called ===");
+  ESP_LOGD(TAG, "at_update_: %d, fast_mode_enabled_: %d, full_update_every_: %d", 
+           this->at_update_, this->fast_mode_enabled_, this->full_update_every_);
+  
   // Calculate buffer dimensions
-  // Width in bytes: each byte contains 4 pixels (2 bits per pixel)
   uint16_t width_bytes = (EPD_WIDTH % 4 == 0) ? (EPD_WIDTH / 4) : (EPD_WIDTH / 4 + 1);
   
-  // Check if full update is needed
+  // Track update count
   this->at_update_++;
+  
+  // Switch to fast mode after first display (if fast mode is enabled)
+  if (!this->fast_mode_enabled_ && this->at_update_ >= 1 && this->full_update_every_ > 1) {
+    ESP_LOGI(TAG, "*** SWITCHING TO FAST REFRESH MODE ***");
+    this->init_fast_();
+    this->fast_mode_enabled_ = true;
+  }
+  
+  // Reset counter for periodic full updates
   if (this->at_update_ >= this->full_update_every_) {
+    ESP_LOGD(TAG, "Resetting update counter (was %d)", this->at_update_);
     this->at_update_ = 0;
   }
   
@@ -106,8 +149,6 @@ void HOT WaveshareEPaper2P13InGV2::display() {
   // Send image data
   for (uint16_t y = 0; y < EPD_HEIGHT; y++) {
     for (uint16_t x = 0; x < width_bytes; x++) {
-      // The display only uses the first 31 bytes per row
-      // This matches the original driver behavior
       if (x < 31) {
         uint8_t byte_data = this->buffer_[x + y * width_bytes];
         this->data(byte_data);
@@ -117,15 +158,25 @@ void HOT WaveshareEPaper2P13InGV2::display() {
     }
   }
   
-  // Turn on display
+  ESP_LOGD(TAG, "Data sent, refreshing display");
+  
+  // Refresh display
   this->turn_on_display_();
+  
+  ESP_LOGD(TAG, "Display update complete");
 }
 
 void WaveshareEPaper2P13InGV2::turn_on_display_() {
+  ESP_LOGD(TAG, "Sending display refresh command");
+  
   // Display refresh command
   this->command(0x12);
   this->data(0x00);
+  
+  ESP_LOGD(TAG, "Waiting for refresh to complete...");
   this->wait_until_idle_();
+  
+  ESP_LOGD(TAG, "Display refresh complete");
 }
 
 void WaveshareEPaper2P13InGV2::deep_sleep() {

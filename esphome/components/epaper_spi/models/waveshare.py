@@ -86,3 +86,11 @@ WaveshareModel(
         0x0, 0x0, 0x0,
     ),
 )
+
+EpaperModel(
+    "WAVESHARE-2.13IN-G-V2",
+    class_name="EPaper213GV2",
+    width=122,
+    height=250,
+    initsequence=(),  # Init is handled in C++ code
+)

@@ -835,7 +835,7 @@ class WaveshareEPaper7P5InBV3 : public WaveshareEPaper {
 
   int get_height_internal() override;
 
-  void reset_() {
+  virtual void reset_() {
     if (this->reset_pin_ != nullptr) {
       this->reset_pin_->digital_write(true);
       delay(200);  // NOLINT

@@ -31,7 +31,8 @@ class WaveshareEPaper2P13InGV2 : public WaveshareEPaperBase {
   int get_width_internal() override;
   int get_height_internal() override;
   
-  void reset_() override{
+  // Custom reset for this display
+  void reset_() override {
     if (this->reset_pin_ != nullptr) {
       this->reset_pin_->digital_write(true);
       delay(200);  // NOLINT
@@ -42,12 +43,15 @@ class WaveshareEPaper2P13InGV2 : public WaveshareEPaperBase {
     }
   }
   
+  uint32_t idle_timeout_() override { return 10000u; }  // 10 seconds timeout
+  
   void turn_on_display_();
   void init_fast_();
   uint8_t color_to_4color_(Color color);
   
   uint32_t full_update_every_{30};
   uint32_t at_update_{0};
+  bool fast_mode_enabled_{false};
 };
 
 }  // namespace waveshare_epaper

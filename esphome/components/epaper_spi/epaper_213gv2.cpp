@@ -29,12 +29,14 @@ bool EPaper213GV2::initialise(bool partial) {
     // Power on for partial update
     this->command(0x04);
     
+    // Use delay instead of relying on busy pin for partial refresh
+    this->next_delay_ = 100;  // 100ms should be enough for power-on
+    
   } else {
     // Full initialization
     ESP_LOGV(TAG, "Full refresh init");
     
     // Set resolution - TRES command (0x61)
-    // Note: 0x7A = 122 decimal
     this->cmd_data(0x61, {
       0x00,  // WIDTH_H
       0x7A,  // WIDTH_L (122 = 0x7A)
@@ -47,9 +49,12 @@ bool EPaper213GV2::initialise(bool partial) {
     
     // Power on - this is part of initialization for this display
     this->command(0x04);
+    
+    // Use delay instead of relying on busy pin for full refresh init
+    this->next_delay_ = 200;  // 200ms for power-on to complete
   }
   
-  // The framework will automatically wait for busy after this returns
+  // Return true immediately, the delay will be handled by framework
   return true;
 }
 
@@ -71,7 +76,6 @@ bool HOT EPaper213GV2::transfer_data() {
     size_t row_start = this->current_data_index_ * width_bytes;
     
     // The display only uses the first 31 bytes per row
-    // This matches the original driver behavior
     for (uint16_t x = 0; x < width_bytes && x < 31; x++) {
       this->write_byte(this->buffer_[row_start + x]);
     }
@@ -97,22 +101,31 @@ bool HOT EPaper213GV2::transfer_data() {
 
 void EPaper213GV2::power_on() {
   // For this display, power-on (0x04) happens during initialise()
-  // This method can be empty
+  // This state can be used for a small delay if needed
   ESP_LOGV(TAG, "Power on (no-op for this display)");
+  // Optional: add tiny delay
+  // this->next_delay_ = 10;
 }
 
 void EPaper213GV2::refresh_screen(bool partial) {
   ESP_LOGV(TAG, "Refresh screen (partial=%d)", partial);
   // Display refresh command
   this->cmd_data(0x12, {0x00});
-  // The framework will automatically wait for busy after this
+  
+  // Use fixed delays instead of busy pin
+  // Partial refresh is faster than full refresh
+  if (partial) {
+    this->next_delay_ = 1000;  // 1 second for partial refresh
+  } else {
+    this->next_delay_ = 4000;  // 4 seconds for full refresh
+  }
 }
 
 void EPaper213GV2::power_off() {
   ESP_LOGV(TAG, "Power off");
   // Power off command
   this->cmd_data(0x02, {0x00});
-  this->next_delay_ = 100;  // Required delay
+  this->next_delay_ = 100;  // 100ms delay
 }
 
 void EPaper213GV2::deep_sleep() {
@@ -122,14 +135,12 @@ void EPaper213GV2::deep_sleep() {
 }
 
 void EPaper213GV2::fill(Color color) {
-  // If clipping is active, fall back to base implementation
   if (this->get_clipping().is_set()) {
     Display::fill(color);
     return;
   }
   
   uint8_t fill_color = this->color_to_4color_(color);
-  // Pack 4 pixels into one byte
   uint8_t fill_byte = (fill_color << 6) | (fill_color << 4) | (fill_color << 2) | fill_color;
   
   this->buffer_.fill(fill_byte);
@@ -143,23 +154,15 @@ void HOT EPaper213GV2::draw_pixel_at(int x, int y, Color color) {
   if (!rotate_coordinates_(x, y))
     return;
   
-  // Calculate byte position
   uint32_t byte_pos = (y * this->row_width_) + (x / 4);
-  
-  // Calculate bit position within byte (2 bits per pixel)
-  // Pixel 0 = bits 7-6, Pixel 1 = bits 5-4, Pixel 2 = bits 3-2, Pixel 3 = bits 1-0
   uint8_t bit_shift = 6 - ((x % 4) * 2);
-  
-  // Convert color to 2-bit value
   uint8_t pixel_color = this->color_to_4color_(color);
   
-  // Clear the 2 bits and set new color
   this->buffer_[byte_pos] &= ~(0x03 << bit_shift);
   this->buffer_[byte_pos] |= (pixel_color << bit_shift);
 }
 
 uint8_t EPaper213GV2::color_to_4color_(Color color) {
-  // Use the colorconv utility for BWYR conversion
   return color_to_bwyr(color, COLOR_BLACK, COLOR_WHITE, COLOR_YELLOW, COLOR_RED);
 }
 

@@ -14,15 +14,15 @@ class WaveshareEPaper2P13InGV2 : public WaveshareEPaperBase {
   void display() override;
   void dump_config() override;
   void deep_sleep() override;
-  
+
   void fill(Color color) override;
-  
-  display::DisplayType get_display_type() override { 
-    return display::DisplayType::DISPLAY_TYPE_COLOR; 
+
+  display::DisplayType get_display_type() override {
+    return display::DisplayType::DISPLAY_TYPE_COLOR;
   }
-  
-  void set_full_update_every(uint32_t full_update_every) { 
-    this->full_update_every_ = full_update_every; 
+
+  void set_full_update_every(uint32_t full_update_every) {
+    this->full_update_every_ = full_update_every;
   }
 
  protected:
@@ -30,7 +30,7 @@ class WaveshareEPaper2P13InGV2 : public WaveshareEPaperBase {
   uint32_t get_buffer_length_() override;
   int get_width_internal() override;
   int get_height_internal() override;
-  
+
   void reset_() {
     if (this->reset_pin_ != nullptr) {
       this->reset_pin_->digital_write(true);
@@ -41,13 +41,19 @@ class WaveshareEPaper2P13InGV2 : public WaveshareEPaperBase {
       delay(200);  // NOLINT
     }
   }
-  
+
   void turn_on_display_();
+  void init_full_();
   void init_fast_();
   uint8_t color_to_4color_(Color color);
-  
+
   uint32_t full_update_every_{30};
   uint32_t at_update_{0};
+  // Tracks whether the one-time hardware init has been done.
+  // Without this flag, initialize() (called every update cycle by the
+  // ESPHome framework) would trigger a full reset + power-on every time,
+  // causing the 10-15 second blink on every refresh.
+  bool initialized_{false};
 };
 
 }  // namespace waveshare_epaper

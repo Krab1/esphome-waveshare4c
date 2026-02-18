@@ -8,15 +8,33 @@ namespace esphome::epaper_spi {
 static const char *const TAG = "epaper_spi.213gv2";
 
 bool EPaper213GV2::initialise(bool partial) {
+  ESP_LOGV(TAG, "Initialise (partial=%d)", partial);
+  
   // Send base init sequence if provided
   EPaperBase::initialise(partial);
   
   if (partial) {
     // Fast refresh initialization
-    init_fast_();
+    ESP_LOGV(TAG, "Fast refresh init");
+    
+    // Set resolution
+    this->cmd_data(0x61, {0x00, 0x7A, 0x00, 0xFA});
+    
+    // Fast refresh settings
+    this->cmd_data(0xE0, {0x02});
+    this->cmd_data(0xE6, {90});
+    this->command(0xA5);
+    this->cmd_data(0xE9, {0x01});
+    
+    // Power on for partial update
+    this->command(0x04);
+    
   } else {
     // Full initialization
+    ESP_LOGV(TAG, "Full refresh init");
+    
     // Set resolution - TRES command (0x61)
+    // Note: 0x7A = 122 decimal
     this->cmd_data(0x61, {
       0x00,  // WIDTH_H
       0x7A,  // WIDTH_L (122 = 0x7A)
@@ -26,32 +44,20 @@ bool EPaper213GV2::initialise(bool partial) {
     
     // Unknown command from datasheet
     this->cmd_data(0xE9, {0x01});
+    
+    // Power on - this is part of initialization for this display
+    this->command(0x04);
   }
   
+  // The framework will automatically wait for busy after this returns
   return true;
-}
-
-void EPaper213GV2::init_fast_() {
-  // Set resolution - TRES command (0x61)
-  this->cmd_data(0x61, {
-    0x00,  // WIDTH_H
-    0x7A,  // WIDTH_L (122 = 0x7A)
-    0x00,  // HEIGHT_H  
-    0xFA   // HEIGHT_L (250 = 0xFA)
-  });
-  
-  // Fast refresh settings
-  this->cmd_data(0xE0, {0x02});
-  this->cmd_data(0xE6, {90});
-  
-  this->command(0xA5);
-  this->cmd_data(0xE9, {0x01});
 }
 
 bool HOT EPaper213GV2::transfer_data() {
   auto start_time = millis();
   
   if (this->current_data_index_ == 0) {
+    ESP_LOGV(TAG, "Starting data transfer");
     // Start data transmission - command 0x10
     this->command(0x10);
     this->start_data_();
@@ -85,21 +91,21 @@ bool HOT EPaper213GV2::transfer_data() {
   
   this->disable();
   this->current_data_index_ = 0;
+  ESP_LOGV(TAG, "Data transfer complete");
   return true;
 }
 
 void EPaper213GV2::power_on() {
-  ESP_LOGV(TAG, "Power on");
-  // Power on command
-  this->command(0x04);
-  // The state machine will automatically wait for busy pin after this
+  // For this display, power-on (0x04) happens during initialise()
+  // This method can be empty
+  ESP_LOGV(TAG, "Power on (no-op for this display)");
 }
 
 void EPaper213GV2::refresh_screen(bool partial) {
-  ESP_LOGV(TAG, "Refresh screen");
+  ESP_LOGV(TAG, "Refresh screen (partial=%d)", partial);
   // Display refresh command
   this->cmd_data(0x12, {0x00});
-  // The state machine will automatically wait for busy pin after this
+  // The framework will automatically wait for busy after this
 }
 
 void EPaper213GV2::power_off() {

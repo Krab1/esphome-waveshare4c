@@ -18,37 +18,51 @@ static const uint8_t COLOR_YELLOW = 0x2;
 static const uint8_t COLOR_RED = 0x3;
 
 // ---------------------------------------------------------------------------
-// initialize() is called by the ESPHome framework before every display()
-// call.  The original code reset the hardware here unconditionally, which
-// caused the panel to run its full ~15-second blink sequence on every single
-// update cycle.
+// Design contract (this is what the previous version got wrong):
 //
-// Fix: split the one-time hardware bring-up (init_full_) from the lightweight
-// per-update preparation (init_fast_).  Use the initialized_ flag so that
-// the slow full init only ever runs once after power-on or deep-sleep wake.
-// Subsequent calls to initialize() pick the fast path, which only takes a
-// few hundred milliseconds and does not cause visible blinking.
+//   initialize()  Called by the ESPHome framework BEFORE every display().
+//                 ALL hardware init decisions live here and nowhere else.
+//
+//   display()     Only sends pixel data and triggers the panel refresh.
+//                 Never writes init registers.
+//
+// Root cause of the on-boot double-blink:
+//   First fix had initialize() call init_full_() when !initialized_, then
+//   display() ALSO called init_full_() because at_update_ was still 0.
+//   That double-init produced the long blink.  Moving all init logic into
+//   initialize() and advancing at_update_ there (to 1) after the first boot
+//   prevents display() from ever calling init functions at all.
 // ---------------------------------------------------------------------------
 
 void WaveshareEPaper2P13InGV2::initialize() {
   if (!this->initialized_) {
-    // First call: allocate buffer and do the full hardware init.
+    // ── First ever call after power-on / deep-sleep wake ─────────────────
     this->init_internal_(this->get_buffer_length_());
-    this->init_full_();
     this->initialized_ = true;
+    this->init_full_();
+    // Set counter to 1 so the next cycle takes the fast path.
+    // (at_update_ == 0 is the "time for a full refresh" sentinel.)
+    this->at_update_ = 1;
+
+  } else if (this->at_update_ == 0) {
+    // ── Periodic full refresh ─────────────────────────────────────────────
+    // Expected brief blink every full_update_every_ cycles.
+    this->init_full_();
+
   } else {
-    // Every subsequent call: lightweight re-init for fast refresh.
-    // Do NOT reset at_update_ here; that counter is managed in display().
+    // ── Normal fast refresh (majority of updates) ─────────────────────────
+    // No reset pulse → no blink.
     this->init_fast_();
   }
 }
 
-// Full power-on initialisation (runs once).
+// Full init – includes a hardware reset, so will cause a short blink.
+// Called once on boot and then every full_update_every_ cycles.
 void WaveshareEPaper2P13InGV2::init_full_() {
   this->reset_();
   this->wait_until_idle_();
 
-  // Set resolution - TRES command (0x61)
+  // TRES – set resolution (0x61)
   this->command(0x61);
   this->data(0x00);  // WIDTH_H
   this->data(0x7C);  // WIDTH_L  (122 = 0x7C)
@@ -63,8 +77,7 @@ void WaveshareEPaper2P13InGV2::init_full_() {
   this->wait_until_idle_();
 }
 
-// Fast/partial re-init (runs before every subsequent refresh).
-// No reset pulse → no blinking.
+// Fast refresh init – no reset, no blink.
 void WaveshareEPaper2P13InGV2::init_fast_() {
   // Set resolution
   this->command(0x61);
@@ -107,25 +120,11 @@ void HOT WaveshareEPaper2P13InGV2::display() {
   // Width in bytes: each byte holds 4 pixels (2 bits per pixel).
   uint16_t width_bytes = (EPD_WIDTH % 4 == 0) ? (EPD_WIDTH / 4) : (EPD_WIDTH / 4 + 1);
 
-  // Decide whether this cycle is a full or fast refresh BEFORE sending data.
-  // Previously this decision was made inside initialize(), but at_update_ was
-  // then modified here, meaning the two functions saw different counter values.
-  bool do_full = (this->at_update_ == 0);
-
-  // Advance counter for next cycle.
+  // Advance counter AFTER initialize() has already acted on the current value.
   this->at_update_ = (this->at_update_ + 1) % this->full_update_every_;
 
-  if (do_full) {
-    // Full refresh: re-run the slow hardware init so the panel applies its
-    // full waveform sequence.  This is expected to blink, but only every
-    // full_update_every_ cycles rather than every single update.
-    this->init_full_();
-  }
-  // Fast refresh: init_fast_() was already called by initialize() above.
-
-  // Start data transmission
+  // Send pixel data – nothing else.
   this->command(0x10);
-
   for (uint16_t y = 0; y < EPD_HEIGHT; y++) {
     for (uint16_t x = 0; x < width_bytes; x++) {
       if (x < 31) {
@@ -146,8 +145,9 @@ void WaveshareEPaper2P13InGV2::turn_on_display_() {
 }
 
 void WaveshareEPaper2P13InGV2::deep_sleep() {
-  // Reset initialized_ so the next wake-up runs init_full_ again.
+  // Reset flags so the next boot runs init_full_() again.
   this->initialized_ = false;
+  this->at_update_ = 0;
 
   this->command(0x02);
   this->data(0x00);

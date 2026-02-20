@@ -20,7 +20,7 @@ void WaveshareEPaper2P13InGV2::initialize() {
 
   if (this->first_call_) {
     this->first_call_ = false;
-    ESP_LOGD(TAG, "initialize(): skipping reset (first call, base already reset)");
+    ESP_LOGD(TAG, "initialize(): skipping reset (base already reset at boot)");
   } else {
     if (this->reset_pin_ != nullptr) {
       ESP_LOGD(TAG, "initialize(): performing hardware reset");
@@ -36,61 +36,41 @@ void WaveshareEPaper2P13InGV2::initialize() {
   this->wait_until_idle_();
   ESP_LOGD(TAG, "initialize(): busy cleared");
 
-  // Set resolution - common to both paths
-  this->command(0x61);
-  this->data(0x00);
-  this->data(0x7C);  // WIDTH 122
-  this->data(0x00);
-  this->data(0xFA);  // HEIGHT 250
-
   if (this->at_update_ == 0) {
-    ESP_LOGD(TAG, "initialize(): full waveform init");
-
-    // Full waveform mode (0x00 = full, 0x02 = fast)
-    this->command(0xE0);
+    ESP_LOGD(TAG, "initialize(): FULL waveform init");
+    // Exact original sequence that was confirmed working
+    this->command(0x61);
     this->data(0x00);
-
+    this->data(0x7C);  // WIDTH 122
+    this->data(0x00);
+    this->data(0xFA);  // HEIGHT 250
     this->command(0xE9);
     this->data(0x01);
-
-    // Power on
-    this->command(0x04);
+    this->command(0x04);  // power on
     this->wait_until_idle_();
-    ESP_LOGD(TAG, "initialize(): power on done");
-
-    // This command prepares the panel for the refresh trigger (0x12).
-    // Fast path has it; without it the full path's 0x12 completes in ~5ms
-    // (panel ignores it). With it, 0x12 should take several seconds.
-    this->command(0xA5);
-    this->wait_until_idle_();
-    ESP_LOGD(TAG, "initialize(): full init done (0xA5 ready)");
+    ESP_LOGD(TAG, "initialize(): full init done");
 
   } else {
-    ESP_LOGD(TAG, "initialize(): fast waveform init");
-    this->init_fast_();
+    ESP_LOGD(TAG, "initialize(): FAST waveform init");
+    // Same structure as full, but with fast waveform registers inserted.
+    // Key difference from original init_fast_(): 0xA5 is removed from here
+    // and the sequence mirrors full path so the data transmission (0x10 + 0x12)
+    // works the same way.
+    this->command(0x61);
+    this->data(0x00);
+    this->data(0x7C);
+    this->data(0x00);
+    this->data(0xFA);
+    this->command(0xE0);
+    this->data(0x02);  // fast waveform mode
+    this->command(0xE6);
+    this->data(90);    // fast refresh time
+    this->command(0xE9);
+    this->data(0x01);
+    this->command(0x04);  // power on
+    this->wait_until_idle_();
+    ESP_LOGD(TAG, "initialize(): fast init done");
   }
-}
-
-void WaveshareEPaper2P13InGV2::init_fast_() {
-  ESP_LOGD(TAG, "init_fast_(): setting registers");
-
-  this->command(0xE0);
-  this->data(0x02);  // fast waveform mode
-
-  this->command(0xE6);
-  this->data(90);
-
-  this->command(0xE9);
-  this->data(0x01);
-
-  // Power on
-  this->command(0x04);
-  this->wait_until_idle_();
-  ESP_LOGD(TAG, "init_fast_(): power on done");
-
-  this->command(0xA5);
-  this->wait_until_idle_();
-  ESP_LOGD(TAG, "init_fast_(): done (0xA5 ready)");
 }
 
 void WaveshareEPaper2P13InGV2::dump_config() {
@@ -126,18 +106,19 @@ void HOT WaveshareEPaper2P13InGV2::display() {
       this->data((x < 31) ? this->buffer_[x + y * width_bytes] : 0x00);
     }
   }
+  ESP_LOGD(TAG, "display(): pixel data sent");
 
-  ESP_LOGD(TAG, "display(): pixel data sent, triggering refresh");
   this->turn_on_display_();
   ESP_LOGD(TAG, "display(): done");
 }
 
 void WaveshareEPaper2P13InGV2::turn_on_display_() {
-  ESP_LOGD(TAG, "turn_on_display_(): sending 0x12");
+  ESP_LOGD(TAG, "turn_on_display_(): sending 0x12, waiting...");
   this->command(0x12);
   this->data(0x00);
+  uint32_t start = millis();
   this->wait_until_idle_();
-  ESP_LOGD(TAG, "turn_on_display_(): busy cleared, refresh complete");
+  ESP_LOGD(TAG, "turn_on_display_(): done in %d ms", (int)(millis() - start));
 }
 
 void WaveshareEPaper2P13InGV2::deep_sleep() {

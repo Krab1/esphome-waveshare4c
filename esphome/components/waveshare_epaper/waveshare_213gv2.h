@@ -32,14 +32,10 @@ class WaveshareEPaper2P13InGV2 : public WaveshareEPaperBase {
   int get_height_internal() override;
 
   void turn_on_display_();
-  void init_fast_();
   uint8_t color_to_4color_(Color color);
 
   uint32_t full_update_every_{30};
   uint32_t at_update_{0};
-  // True only on the very first call to initialize() (from setup()).
-  // setup() already calls reset_() before initialize(), so we skip the
-  // reset on that first call to avoid a double-reset blink at boot.
   bool first_call_{true};
 };
 

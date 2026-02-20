@@ -31,10 +31,15 @@ class WaveshareEPaper2P13InGV2 : public WaveshareEPaperBase {
   int get_width_internal() override;
   int get_height_internal() override;
 
+  void set_resolution_();
+  void power_on_();
+  void init_full_();   // full waveform, resets panel
+  void init_fast_();   // fast waveform, NO reset
   uint8_t color_to_4color_(Color color);
 
   uint32_t full_update_every_{30};
   uint32_t at_update_{0};
+  bool first_display_{true};  // skip reset on very first display() after boot
 };
 
 }  // namespace waveshare_epaper

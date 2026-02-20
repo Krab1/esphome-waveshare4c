@@ -10,57 +10,98 @@ static const char *const TAG = "waveshare_2p13_g_v2";
 static const uint16_t EPD_WIDTH = 122;
 static const uint16_t EPD_HEIGHT = 250;
 
-static const uint8_t COLOR_BLACK = 0x0;
-static const uint8_t COLOR_WHITE = 0x1;
+static const uint8_t COLOR_BLACK  = 0x0;
+static const uint8_t COLOR_WHITE  = 0x1;
 static const uint8_t COLOR_YELLOW = 0x2;
-static const uint8_t COLOR_RED = 0x3;
+static const uint8_t COLOR_RED    = 0x3;
 
 // ---------------------------------------------------------------------------
-// Actual ESPHome call flow (read waveshare_epaper.cpp before touching this):
+// Call flow (confirmed from waveshare_epaper.cpp):
 //
-//   WaveshareEPaperBase::setup()   [called ONCE at boot]
-//     → init_internal_()           allocates pixel buffer
+//   WaveshareEPaperBase::setup()          [ONCE at boot]
+//     → init_internal_(get_buffer_length_())   ← buffer allocated HERE
 //     → setup_pins_()
-//     → reset_()                   hardware reset (base class)
-//     → initialize()               our function – called exactly once
+//     → reset_()                               ← hardware reset HERE
+//     → initialize()                           ← our function, ONCE
 //
-//   WaveshareEPaperBase::update()  [called every update_interval]
-//     → do_update_()               runs the display lambda / pages
-//     → display()                  our function – called every interval
+//   WaveshareEPaperBase::update()         [every update_interval]
+//     → do_update_()   runs lambda/pages
+//     → display()      ← our function, every cycle
 //
-// Root causes of the boot blink:
-//   1. initialize() called reset_() again → DOUBLE reset on boot.
+// What was wrong before:
+//   1. initialize() called reset_() again → double reset = long blink on boot.
 //   2. initialize() called init_internal_() again → double buffer allocation.
+//   3. init_fast_() ALSO called reset_() → blink on every fast refresh.
+//   4. display() never set the fast/full waveform mode because init_fast_()
+//      was only called from initialize(), which is only called once at boot
+//      (always with at_update_==0 → full path). Fast mode was NEVER used.
 //
-// Root cause of the periodic blink:
-//   3. display() called init_full_() (which calls reset_()) every
-//      full_update_every_ cycles → unnecessary hardware reset mid-operation.
-//
-// Fix:
-//   • initialize() does ZERO hardware-reset calls; the base already reset.
-//   • initialize() does ZERO init_internal_() calls; the base already allocated.
-//   • initialize() just configures registers once.
-//   • display() sends pixel data and triggers refresh only.  Full vs. fast
-//     waveform is selected by register 0xE0, not by resetting the panel.
+// Pattern used (same as GDEW029T5 in waveshare_epaper.cpp):
+//   initialize() → minimal one-time register setup, no reset, no buffer alloc
+//   display()    → selects full or fast mode at top, sends data, triggers refresh
 // ---------------------------------------------------------------------------
 
-void WaveshareEPaper2P13InGV2::initialize() {
-  // Base class setup() already called reset_() and init_internal_() before us.
-  // Just configure the panel registers; no reset, no buffer allocation here.
-
-  // Set resolution – TRES (0x61)
+// Shared helper: write resolution registers
+void WaveshareEPaper2P13InGV2::set_resolution_() {
   this->command(0x61);
   this->data(0x00);  // WIDTH_H
-  this->data(0x7C);  // WIDTH_L  (122 = 0x7C)
+  this->data(0x7C);  // WIDTH_L  (122)
   this->data(0x00);  // HEIGHT_H
-  this->data(0xFA);  // HEIGHT_L (250 = 0xFA)
+  this->data(0xFA);  // HEIGHT_L (250)
+}
 
-  this->command(0xE9);
-  this->data(0x01);
-
-  // Power on
+// Shared helper: power on and wait
+void WaveshareEPaper2P13InGV2::power_on_() {
   this->command(0x04);
   this->wait_until_idle_();
+}
+
+// Full waveform init — resets the panel.
+// Called inside display() for periodic full refreshes (every full_update_every_
+// cycles after the first). Intentional blink, same as any 4-color e-paper.
+void WaveshareEPaper2P13InGV2::init_full_() {
+  // base class reset_() polarity: low→high. Our panel needs high→low→high.
+  if (this->reset_pin_ != nullptr) {
+    this->reset_pin_->digital_write(true);
+    delay(200);  // NOLINT
+    this->reset_pin_->digital_write(false);
+    delay(2);
+    this->reset_pin_->digital_write(true);
+    delay(200);  // NOLINT
+  }
+  this->wait_until_idle_();
+  this->set_resolution_();
+  this->command(0xE9);
+  this->data(0x01);
+  this->power_on_();
+}
+
+// Fast waveform init — NO reset, NO blink.
+// Called inside display() for every normal (non-full) refresh.
+void WaveshareEPaper2P13InGV2::init_fast_() {
+  // No reset here. Original code had reset_() in this function — that was the
+  // cause of blinking on every fast refresh cycle.
+  this->set_resolution_();
+  this->command(0xE0);
+  this->data(0x02);  // fast waveform mode
+  this->command(0xE6);
+  this->data(90);
+  this->command(0xA5);
+  this->wait_until_idle_();
+  this->command(0xE9);
+  this->data(0x01);
+  this->power_on_();
+}
+
+// Called ONCE by base class setup(), after reset_() and init_internal_().
+// Just set up registers for the initial display — no reset, no buffer alloc.
+void WaveshareEPaper2P13InGV2::initialize() {
+  this->set_resolution_();
+  this->command(0xE9);
+  this->data(0x01);
+  this->power_on_();
+  // at_update_ stays 0 so first display() treats it as a full refresh.
+  // But first_display_ flag prevents an unnecessary reset right after boot.
 }
 
 void WaveshareEPaper2P13InGV2::dump_config() {
@@ -82,36 +123,24 @@ void HOT WaveshareEPaper2P13InGV2::display() {
   this->at_update_ = (this->at_update_ + 1) % this->full_update_every_;
 
   if (full_refresh) {
-    // Full waveform mode: switch register then power on.
-    // No hardware reset needed – just select the waveform via 0xE0.
-    this->command(0xE0);
-    this->data(0x00);  // 0x00 = full waveform, 0x02 = fast waveform
-    this->command(0x04);
-    this->wait_until_idle_();
+    if (this->first_display_) {
+      // Very first display() after boot: initialize() already set up the panel
+      // correctly and base class already reset it. Just proceed to send data.
+      this->first_display_ = false;
+    } else {
+      // Periodic full refresh: reset + full waveform. Will blink — expected.
+      this->init_full_();
+    }
   } else {
-    // Fast refresh mode
-    this->command(0xE0);
-    this->data(0x02);
-
-    this->command(0xE6);
-    this->data(90);
-
-    this->command(0xA5);
-    this->wait_until_idle_();
+    // Fast refresh: mode registers only, no reset, no blink.
+    this->init_fast_();
   }
-
-  this->command(0xE9);
-  this->data(0x01);
 
   // Send pixel data
   this->command(0x10);
   for (uint16_t y = 0; y < EPD_HEIGHT; y++) {
     for (uint16_t x = 0; x < width_bytes; x++) {
-      if (x < 31) {
-        this->data(this->buffer_[x + y * width_bytes]);
-      } else {
-        this->data(0x00);
-      }
+      this->data((x < 31) ? this->buffer_[x + y * width_bytes] : 0x00);
     }
   }
 
@@ -123,14 +152,12 @@ void HOT WaveshareEPaper2P13InGV2::display() {
 
 void WaveshareEPaper2P13InGV2::deep_sleep() {
   this->at_update_ = 0;
+  this->first_display_ = true;  // next wake-up should skip reset on first display
 
-  // Power off
   this->command(0x02);
   this->data(0x00);
   this->wait_until_idle_();
   delay(100);  // NOLINT
-
-  // Deep sleep
   this->command(0x07);
   this->data(0xA5);
 }
@@ -146,27 +173,21 @@ void WaveshareEPaper2P13InGV2::fill(Color color) {
 void HOT WaveshareEPaper2P13InGV2::draw_absolute_pixel_internal(int x, int y, Color color) {
   if (x >= this->get_width_internal() || y >= this->get_height_internal() || x < 0 || y < 0)
     return;
-
   uint16_t width_bytes = (EPD_WIDTH % 4 == 0) ? (EPD_WIDTH / 4) : (EPD_WIDTH / 4 + 1);
   uint32_t byte_pos = (y * width_bytes) + (x / 4);
   uint8_t bit_shift = 6 - ((x % 4) * 2);
   uint8_t pixel_color = this->color_to_4color_(color);
-
   this->buffer_[byte_pos] &= ~(0x03 << bit_shift);
   this->buffer_[byte_pos] |= (pixel_color << bit_shift);
 }
 
 uint8_t WaveshareEPaper2P13InGV2::color_to_4color_(Color color) {
-  uint8_t red = color.r;
-  uint8_t green = color.g;
-  uint8_t blue = color.b;
-  uint16_t brightness = red + green + blue;
-
+  uint16_t brightness = color.r + color.g + color.b;
   if (brightness < 80)
     return COLOR_BLACK;
-  if (red > 200 && red > green * 1.5f && red > blue * 1.5f)
+  if (color.r > 200 && color.r > color.g * 1.5f && color.r > color.b * 1.5f)
     return COLOR_RED;
-  if (red > 200 && green > 200 && blue < 100)
+  if (color.r > 200 && color.g > 200 && color.b < 100)
     return COLOR_YELLOW;
   return COLOR_WHITE;
 }

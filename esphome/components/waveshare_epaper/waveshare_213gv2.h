@@ -31,29 +31,10 @@ class WaveshareEPaper2P13InGV2 : public WaveshareEPaperBase {
   int get_width_internal() override;
   int get_height_internal() override;
 
-  void reset_() {
-    if (this->reset_pin_ != nullptr) {
-      this->reset_pin_->digital_write(true);
-      delay(200);  // NOLINT
-      this->reset_pin_->digital_write(false);
-      delay(2);
-      this->reset_pin_->digital_write(true);
-      delay(200);  // NOLINT
-    }
-  }
-
-  void turn_on_display_();
-  void init_full_();
-  void init_fast_();
   uint8_t color_to_4color_(Color color);
 
   uint32_t full_update_every_{30};
   uint32_t at_update_{0};
-  // Tracks whether the one-time hardware init has been done.
-  // Without this flag, initialize() (called every update cycle by the
-  // ESPHome framework) would trigger a full reset + power-on every time,
-  // causing the 10-15 second blink on every refresh.
-  bool initialized_{false};
 };
 
 }  // namespace waveshare_epaper
